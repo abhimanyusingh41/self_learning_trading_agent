@@ -66,6 +66,7 @@ def build_agent(config: dict, mode: str):
 
     if mode in ("paper", "live"):
         from src.data.market_data import MarketData
+        from src.data.binance_data import BinanceData
         from src.analysis.market_analyzer import MarketAnalyzer
 
         kite_cfg = config.get("kite", {})
@@ -73,10 +74,24 @@ def build_agent(config: dict, mode: str):
             api_key=kite_cfg.get("api_key", ""),
             access_token=kite_cfg.get("access_token", ""),
         )
-        analyzer = MarketAnalyzer(market_data, config)
+
+        binance_data = None
+        binance_cfg = config.get("binance", {})
+        if binance_cfg.get("api_key"):
+            try:
+                binance_data = BinanceData(
+                    api_key=binance_cfg["api_key"],
+                    api_secret=binance_cfg["api_secret"],
+                    testnet=binance_cfg.get("testnet", True),
+                )
+            except Exception as e:
+                logger.warning(f"Binance init failed (crypto disabled): {e}")
+
+        analyzer = MarketAnalyzer(market_data, config, binance_data=binance_data)
 
         if mode == "paper":
             from src.execution.paper_trader import PaperTrader
+            from src.execution.binance_trader import BinancePaperTrader
             initial_capital = config["risk"].get("initial_capital", 100000)
             executor = PaperTrader(initial_capital=initial_capital)
             executor.set_price_feed(
@@ -84,15 +99,20 @@ def build_agent(config: dict, mode: str):
                 .get(f"{config['instruments'].get('exchange', 'NSE')}:{sym}", {})
                 .get("last_price", 0.0)
             )
-            logger.info(f"Paper trading mode | Capital: ₹{initial_capital:,}")
+            # Attach Binance paper trader for crypto positions
+            executor.binance_paper = BinancePaperTrader(initial_usdt=initial_capital * 0.2)
+            logger.info(f"Paper trading mode | Capital: ₹{initial_capital:,} + 20% in crypto (USDT)")
 
         else:  # live
             from src.execution.live_trader import LiveTrader
+            from src.execution.binance_trader import BinanceLiveTrader
             kite_cfg = config["kite"]
             executor = LiveTrader(
                 api_key=kite_cfg["api_key"],
                 access_token=kite_cfg["access_token"],
             )
+            if binance_data:
+                executor.binance_live = BinanceLiveTrader(binance_data)
             logger.warning("LIVE TRADING MODE — real money will be used!")
 
     elif mode == "backtest":

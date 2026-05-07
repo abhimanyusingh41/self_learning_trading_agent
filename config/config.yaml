@@ -6,16 +6,22 @@ kite:
   api_secret: ${KITE_API_SECRET}
   access_token: ${KITE_ACCESS_TOKEN}
 
+binance:
+  api_key: ${BINANCE_API_KEY}
+  api_secret: ${BINANCE_API_SECRET}
+  testnet: true   # set to false for real Binance trading
+
 risk:
   daily_loss_limit_pct: 2.0
   per_trade_loss_pct: 0.5
-  max_positions: 3
+  max_positions: 6          # increased for multi-asset
   max_trade_value_pct: 10.0
   kill_switch: false
   initial_capital: 100000
 
 instruments:
-  watchlist:
+  # Indian equities (NSE)
+  equities:
     - RELIANCE
     - TCS
     - HDFCBANK
@@ -27,7 +33,22 @@ instruments:
     - KOTAKBANK
     - AXISBANK
   exchange: NSE
-  segment: EQ
+
+  # Indian commodities (MCX)
+  commodities:
+    - GOLD
+    - GOLDM
+    - SILVER
+    - SILVERM
+  commodity_exchange: MCX
+
+  # Crypto (Binance — USDT pairs)
+  crypto:
+    - BTCUSDT
+    - ETHUSDT
+    - BNBUSDT
+    - SOLUSDT
+    - XRPUSDT
 
 agent:
   model: claude-opus-4-7
@@ -38,9 +59,13 @@ agent:
 
 market:
   timezone: Asia/Kolkata
-  open_time: "09:15"
-  close_time: "15:30"
-  pre_open_time: "09:00"
+  # NSE equity hours
+  equity_open: "09:15"
+  equity_close: "15:30"
+  # MCX commodity hours
+  commodity_open: "09:00"
+  commodity_close: "23:30"
+  # Crypto: 24x7
 
 backtest:
   start_date: "2024-01-01"
