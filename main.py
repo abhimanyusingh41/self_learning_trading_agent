@@ -45,9 +45,20 @@ def setup_logging(config: dict):
     log_file = log_config.get("file", "logs/trading_agent.log")
     Path(log_file).parent.mkdir(parents=True, exist_ok=True)
 
+    import pytz
+    from datetime import datetime
+    def ist_time(record):
+        ist = pytz.timezone("Asia/Kolkata")
+        record["extra"]["ist_time"] = datetime.now(ist).strftime("%Y-%m-%d %H:%M:%S IST")
+
     logger.remove()
-    logger.add(sys.stdout, level=level, format="<green>{time:HH:mm:ss}</green> | <level>{level:<8}</level> | {message}")
-    logger.add(log_file, level=level, rotation="1 day", retention="30 days", compression="gz")
+    logger.add(sys.stdout, level=level,
+               format="<green>{extra[ist_time]}</green> | <level>{level:<8}</level> | {message}",
+               filter=ist_time)
+    logger.add(log_file, level=level,
+               format="{extra[ist_time]} | {level:<8} | {message}",
+               filter=ist_time,
+               rotation="1 day", retention="30 days", compression="gz")
 
 
 def build_agent(config: dict, mode: str):
