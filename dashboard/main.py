@@ -45,7 +45,7 @@ def load_memory() -> dict:
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request, _=Depends(require_auth)):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="index.html")
 
 
 @app.get("/api/summary")
