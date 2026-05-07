@@ -14,6 +14,9 @@ from src.execution.executor import BaseExecutor
 
 IST = pytz.timezone("Asia/Kolkata")
 
+# Crypto symbols traded via Binance (always open)
+CRYPTO_SYMBOLS = {"BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT"}
+
 
 class TradingAgent:
     def __init__(
@@ -35,13 +38,22 @@ class TradingAgent:
         self._running = False
         self._last_market_context: str = ""
 
+        # Crypto symbols from config (always tradeable)
+        cfg_crypto = config.get("instruments", {}).get("crypto", [])
+        self._crypto_symbols = set(cfg_crypto) if cfg_crypto else CRYPTO_SYMBOLS
+
     def run_once(self):
         """Execute one analysis-decision-execution cycle."""
         now_ist = datetime.now(IST)
+        equity_open = self._is_equity_session(now_ist)
+        commodity_open = self._is_commodity_session(now_ist)
+        crypto_open = True  # Always open
 
-        if not self._is_market_open(now_ist):
-            logger.info("Market is closed. Skipping cycle.")
-            return
+        if not equity_open and not commodity_open:
+            logger.info("NSE and MCX closed — crypto-only cycle")
+
+        # Always check exit conditions (SL/target hits, EOD close)
+        self._check_exit_conditions(now_ist)
 
         # Check daily loss limit
         daily_pnl = self.executor.get_daily_pnl()
@@ -50,11 +62,11 @@ class TradingAgent:
             logger.warning(f"Trading halted: {reason}")
             return
 
-        # Check open positions against SL/targets
-        self._check_exit_conditions()
-
-        # Build market context
-        logger.info("Building market context...")
+        # Build market context (includes only open markets)
+        logger.info(
+            f"Building market context | NSE={'open' if equity_open else 'closed'} | "
+            f"MCX={'open' if commodity_open else 'closed'} | Crypto=open"
+        )
         market_context = self.analyzer.build_market_context()
         self._last_market_context = market_context
 
@@ -67,9 +79,13 @@ class TradingAgent:
         stats = self.memory.get_stats_summary()
         lessons_text = f"PERFORMANCE:\n{stats}\n\nRECENT LESSONS:\n{lessons}"
 
+        # Add session context so brain knows what it can trade
+        session_note = self._session_note(equity_open, commodity_open)
+        full_context = f"{session_note}\n\n{market_context}"
+
         # Brain decides
         logger.info("Asking brain for trade decision...")
-        decision = self.brain.analyze_and_decide(market_context, lessons_text, portfolio_str, capital)
+        decision = self.brain.analyze_and_decide(full_context, lessons_text, portfolio_str, capital)
 
         logger.info(
             f"Decision: {decision.action} | Symbol: {decision.symbol} | "
@@ -78,6 +94,17 @@ class TradingAgent:
 
         if decision.action in ("WAIT", "HOLD"):
             logger.info(f"Brain says wait: {decision.rationale[:200]}")
+            return
+
+        # Validate: don't trade NSE stocks when market is closed
+        symbol = decision.symbol or ""
+        if not equity_open and symbol and symbol not in self._crypto_symbols and not self._is_mcx_symbol(symbol):
+            logger.warning(f"Brain picked {symbol} but NSE is closed — skipping")
+            return
+
+        # Validate: don't trade MCX when closed
+        if not commodity_open and self._is_mcx_symbol(symbol):
+            logger.warning(f"Brain picked MCX symbol {symbol} but MCX is closed — skipping")
             return
 
         # Risk check
@@ -100,11 +127,20 @@ class TradingAgent:
             else:
                 return
 
-        # Execute
+        # Route to correct executor
         self._execute_decision(decision)
 
     def _execute_decision(self, decision: TradeDecision):
-        result = self.executor.place_order(
+        # Crypto goes to binance_paper/binance_live if attached
+        is_crypto = decision.symbol in self._crypto_symbols
+        if is_crypto and hasattr(self.executor, "binance_paper"):
+            exec_target = self.executor.binance_paper
+        elif is_crypto and hasattr(self.executor, "binance_live"):
+            exec_target = self.executor.binance_live
+        else:
+            exec_target = self.executor
+
+        result = exec_target.place_order(
             symbol=decision.symbol,
             action=decision.action,
             quantity=decision.quantity,
@@ -127,6 +163,7 @@ class TradingAgent:
                 "key_risks": decision.key_risks,
                 "setup_type": decision.setup_type,
                 "time_horizon": decision.time_horizon,
+                "asset_class": "crypto" if is_crypto else "equity",
                 "market_context_snapshot": self._last_market_context[:2000],
                 "order_id": result.order_id,
             })
@@ -134,14 +171,22 @@ class TradingAgent:
         else:
             logger.error(f"Order failed: {result.message}")
 
-    def _check_exit_conditions(self):
+    def _check_exit_conditions(self, now_ist: datetime):
         """Check all open trades for SL/target hits or EOD close."""
         open_trades = self.memory.get_open_trades()
-        now_ist = datetime.now(IST)
 
         for trade in open_trades:
             symbol = trade["symbol"]
-            current_price = self.executor.get_current_price(symbol)
+            is_crypto = symbol in self._crypto_symbols
+
+            # Get price from right executor
+            if is_crypto and hasattr(self.executor, "binance_paper"):
+                current_price = self.executor.binance_paper.get_current_price(symbol)
+            elif is_crypto and hasattr(self.executor, "binance_live"):
+                current_price = self.executor.binance_live.get_current_price(symbol)
+            else:
+                current_price = self.executor.get_current_price(symbol)
+
             if not current_price:
                 continue
 
@@ -162,12 +207,19 @@ class TradingAgent:
                 elif t1 and current_price <= t1:
                     should_close, close_reason = True, "target_1_hit"
 
-            # EOD auto-close at 15:15
-            if now_ist.hour == 15 and now_ist.minute >= 15 and trade.get("time_horizon") == "intraday":
+            # EOD auto-close for intraday equity/commodity (not crypto — no EOD)
+            if (not is_crypto and now_ist.hour == 15 and now_ist.minute >= 15
+                    and trade.get("time_horizon") == "intraday"):
                 should_close, close_reason = True, "eod_auto_close"
 
             if should_close:
-                result = self.executor.close_position(
+                exec_target = self.executor
+                if is_crypto and hasattr(self.executor, "binance_paper"):
+                    exec_target = self.executor.binance_paper
+                elif is_crypto and hasattr(self.executor, "binance_live"):
+                    exec_target = self.executor.binance_live
+
+                result = exec_target.close_position(
                     symbol=symbol,
                     quantity=int(trade["quantity"]),
                     current_price=current_price,
@@ -189,7 +241,7 @@ class TradingAgent:
         lines = [
             f"Available Capital: ₹{capital:,.2f}",
             f"Daily PnL: ₹{daily_pnl:,.2f}",
-            f"Open Positions: {len(positions)}",
+            f"Open Positions (equity/commodity): {len(positions)}",
         ]
         for pos in positions:
             cur = self.executor.get_current_price(pos.get("symbol", ""))
@@ -197,14 +249,51 @@ class TradingAgent:
                 f"  {pos.get('symbol')}: {pos.get('action')} {pos.get('quantity')} "
                 f"@ ₹{pos.get('entry_price', 0):.2f} | CMP: ₹{cur:.2f} | SL: ₹{pos.get('stop_loss', 0):.2f}"
             )
+
+        # Crypto portfolio
+        if hasattr(self.executor, "binance_paper"):
+            bp = self.executor.binance_paper
+            lines.append(f"\nCrypto Portfolio (USDT): {bp.get_portfolio_value():.2f}")
+            for pos in bp.get_open_positions():
+                cur = bp.get_current_price(pos.get("symbol", ""))
+                lines.append(
+                    f"  {pos.get('symbol')}: {pos.get('action')} {pos.get('quantity')} "
+                    f"@ {pos.get('entry_price', 0):.4f} | CMP: {cur:.4f}"
+                )
         return "\n".join(lines)
 
-    def _is_market_open(self, now_ist: datetime) -> bool:
-        if now_ist.weekday() >= 5:  # Saturday=5, Sunday=6
+    def _session_note(self, equity_open: bool, commodity_open: bool) -> str:
+        lines = ["=== TRADING SESSION STATUS ==="]
+        lines.append(f"NSE Equities: {'OPEN ✓' if equity_open else 'CLOSED — do NOT pick NSE stocks'}")
+        lines.append(f"MCX Commodities: {'OPEN ✓' if commodity_open else 'CLOSED — do NOT pick MCX symbols'}")
+        lines.append("Crypto (Binance): OPEN 24x7 ✓ — BTC/ETH/BNB/SOL/XRP available")
+        if not equity_open and not commodity_open:
+            lines.append("\nINSTRUCTION: Only crypto trades are valid right now.")
+        return "\n".join(lines)
+
+    def _is_equity_session(self, now_ist: datetime) -> bool:
+        if now_ist.weekday() >= 5:
             return False
-        market_open = now_ist.replace(hour=9, minute=15, second=0, microsecond=0)
-        market_close = now_ist.replace(hour=15, minute=30, second=0, microsecond=0)
-        return market_open <= now_ist <= market_close
+        market_cfg = self.config.get("market", {})
+        open_t = market_cfg.get("equity_open", "09:15").split(":")
+        close_t = market_cfg.get("equity_close", "15:30").split(":")
+        o = now_ist.replace(hour=int(open_t[0]), minute=int(open_t[1]), second=0, microsecond=0)
+        c = now_ist.replace(hour=int(close_t[0]), minute=int(close_t[1]), second=0, microsecond=0)
+        return o <= now_ist <= c
+
+    def _is_commodity_session(self, now_ist: datetime) -> bool:
+        if now_ist.weekday() >= 5:
+            return False
+        market_cfg = self.config.get("market", {})
+        open_t = market_cfg.get("commodity_open", "09:00").split(":")
+        close_t = market_cfg.get("commodity_close", "23:30").split(":")
+        o = now_ist.replace(hour=int(open_t[0]), minute=int(open_t[1]), second=0, microsecond=0)
+        c = now_ist.replace(hour=int(close_t[0]), minute=int(close_t[1]), second=0, microsecond=0)
+        return o <= now_ist <= c
+
+    def _is_mcx_symbol(self, symbol: str) -> bool:
+        mcx_symbols = set(self.config.get("instruments", {}).get("commodities", []))
+        return symbol in mcx_symbols
 
     def run_scheduler(self, interval_minutes: int = 15):
         """Run continuously, calling run_once() every interval_minutes."""
