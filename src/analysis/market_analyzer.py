@@ -103,25 +103,24 @@ class MarketAnalyzer:
         if not self.commodities:
             return "### MCX COMMODITIES\nNo commodities configured."
 
-        quotes = self.md.get_quote(self.commodities, self.commodity_exchange)
+        quotes = self.md.get_mcx_quote(self.commodities)
         lines = ["### MCX COMMODITIES"]
 
-        for symbol in self.commodities:
-            key = f"{self.commodity_exchange}:{symbol}"
-            q = quotes.get(key, {})
+        for base in self.commodities:
+            q = quotes.get(base, {})
+            active = q.get("active_contract", base)
             lp = q.get("last_price", 0)
             pct = q.get("change", 0)
-            indicators = self._get_kite_indicators(symbol, self.commodity_exchange)
-            if not indicators:
-                lines.append(f"\n{symbol}: ₹{lp:.2f} ({'+' if pct >= 0 else ''}{pct:.2f}%) — no data")
+            if not lp:
+                lines.append(f"\n{base}: no data (contract not found)")
                 continue
-            lines.append(
-                f"\n{symbol}: ₹{lp:.2f} ({'+' if pct >= 0 else ''}{pct:.2f}%)"
-            )
-            lines.append(
-                f"  Trend: {indicators.get('trend')} | RSI: {indicators.get('rsi')} ({indicators.get('rsi_zone')}) | "
-                f"ATR: ₹{indicators.get('atr')}"
-            )
+            indicators = self._get_kite_indicators(active, self.commodity_exchange)
+            lines.append(f"\n{base} ({active}): ₹{lp:.2f} ({'+' if pct >= 0 else ''}{pct:.2f}%)")
+            if indicators:
+                lines.append(
+                    f"  Trend: {indicators.get('trend')} | RSI: {indicators.get('rsi')} "
+                    f"({indicators.get('rsi_zone')}) | ATR: ₹{indicators.get('atr')}"
+                )
         return "\n".join(lines)
 
     def _crypto_section(self) -> str:

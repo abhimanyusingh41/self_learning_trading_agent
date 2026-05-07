@@ -5,10 +5,15 @@ from kiteconnect import KiteConnect
 from loguru import logger
 
 
+# Base names to match MCX futures contracts (e.g. GOLD -> GOLD24MAYFUT)
+MCX_BASE_NAMES = {"GOLD", "GOLDM", "GOLDPETAL", "SILVER", "SILVERM", "CRUDEOIL", "NATURALGAS"}
+
+
 class MarketData:
     def __init__(self, api_key: str, access_token: str):
         self.kite = KiteConnect(api_key=api_key)
         self.kite.set_access_token(access_token)
+        self._mcx_contract_cache: dict[str, str] = {}  # base -> active contract symbol
 
     def get_quote(self, symbols: list[str], exchange: str = "NSE") -> dict:
         instruments = [f"{exchange}:{s}" for s in symbols]
@@ -109,13 +114,65 @@ class MarketData:
             logger.error(f"Failed to get holdings: {e}")
             return []
 
+    def resolve_mcx_symbol(self, base: str) -> Optional[str]:
+        """Resolve a base MCX name (e.g. 'GOLD') to the nearest active futures contract."""
+        if base in self._mcx_contract_cache:
+            return self._mcx_contract_cache[base]
+        try:
+            instruments = self.kite.instruments("MCX")
+            now = datetime.now()
+            # Filter futures for this base, pick nearest expiry >= today
+            candidates = [
+                i for i in instruments
+                if i["tradingsymbol"].startswith(base)
+                and i["instrument_type"] == "FUT"
+                and i["expiry"] >= now.date()
+            ]
+            if not candidates:
+                logger.warning(f"No active MCX futures found for base: {base}")
+                return None
+            # Sort by expiry ascending, pick nearest
+            candidates.sort(key=lambda x: x["expiry"])
+            active = candidates[0]["tradingsymbol"]
+            self._mcx_contract_cache[base] = active
+            logger.info(f"Resolved MCX {base} -> {active} (expiry: {candidates[0]['expiry']})")
+            return active
+        except Exception as e:
+            logger.error(f"Failed to resolve MCX symbol for {base}: {e}")
+            return None
+
+    def get_mcx_quote(self, base_symbols: list[str]) -> dict:
+        """Get MCX quotes using auto-resolved active contract names."""
+        result = {}
+        for base in base_symbols:
+            active = self.resolve_mcx_symbol(base)
+            if not active:
+                continue
+            try:
+                data = self.kite.quote([f"MCX:{active}"])
+                q = data.get(f"MCX:{active}", {})
+                if q:
+                    q["active_contract"] = active
+                    result[base] = q
+            except Exception as e:
+                logger.error(f"Failed to get MCX quote for {base} ({active}): {e}")
+        return result
+
     def _get_instrument_token(self, symbol: str, exchange: str) -> Optional[int]:
+        # For MCX base names, auto-resolve to active contract first
+        actual_symbol = symbol
+        if exchange == "MCX" and symbol in MCX_BASE_NAMES:
+            resolved = self.resolve_mcx_symbol(symbol)
+            if resolved:
+                actual_symbol = resolved
+            else:
+                return None
         try:
             instruments = self.kite.instruments(exchange)
             for inst in instruments:
-                if inst["tradingsymbol"] == symbol:
+                if inst["tradingsymbol"] == actual_symbol:
                     return inst["instrument_token"]
-            logger.warning(f"Instrument token not found for {exchange}:{symbol}")
+            logger.warning(f"Instrument token not found for {exchange}:{actual_symbol}")
             return None
         except Exception as e:
             logger.error(f"Failed to fetch instruments: {e}")
