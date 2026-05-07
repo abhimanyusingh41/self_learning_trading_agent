@@ -9,7 +9,7 @@ kite:
 binance:
   api_key: ${BINANCE_API_KEY}
   api_secret: ${BINANCE_API_SECRET}
-  testnet: true   # set to false for real Binance trading
+  testnet: false  # uses real price feed; paper trading = no real orders placed
 
 risk:
   daily_loss_limit_pct: 2.0
