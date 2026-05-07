@@ -1,0 +1,52 @@
+# Trading Mode: paper | live | backtest
+trading_mode: paper
+
+kite:
+  api_key: ${KITE_API_KEY}
+  api_secret: ${KITE_API_SECRET}
+  access_token: ${KITE_ACCESS_TOKEN}
+
+risk:
+  daily_loss_limit_pct: 2.0
+  per_trade_loss_pct: 0.5
+  max_positions: 3
+  max_trade_value_pct: 10.0
+  kill_switch: false
+  initial_capital: 100000
+
+instruments:
+  watchlist:
+    - RELIANCE
+    - TCS
+    - HDFCBANK
+    - INFY
+    - ICICIBANK
+    - SBIN
+    - BHARTIARTL
+    - BAJFINANCE
+    - KOTAKBANK
+    - AXISBANK
+  exchange: NSE
+  segment: EQ
+
+agent:
+  model: claude-opus-4-7
+  max_tokens: 8192
+  analysis_interval_minutes: 15
+  reflection_enabled: true
+  memory_file: data/memory/trade_memory.json
+
+market:
+  timezone: Asia/Kolkata
+  open_time: "09:15"
+  close_time: "15:30"
+  pre_open_time: "09:00"
+
+backtest:
+  start_date: "2024-01-01"
+  end_date: "2024-12-31"
+  interval: "5minute"
+
+logging:
+  level: INFO
+  file: logs/trading_agent.log

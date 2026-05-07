@@ -1,0 +1,11 @@
+anthropic>=0.40.0
+kiteconnect>=5.0.1
+pandas>=2.2.0
+numpy>=1.26.0
+ta>=0.11.0
+python-dotenv>=1.0.0
+pyyaml>=6.0.1
+loguru>=0.7.2
+apscheduler>=3.10.4
+requests>=2.31.0
+pytz>=2024.1
