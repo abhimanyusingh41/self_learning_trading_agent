@@ -99,7 +99,7 @@ You MUST respond with ONLY valid JSON in this exact structure:
 }
 
 When action is HOLD or WAIT, set symbol/quantity/prices to null.
-CONFIDENCE CALIBRATION: 0.9+ only for textbook setups with multiple confluences. 0.7–0.8 for good setups. Below 0.7 = WAIT."""
+CONFIDENCE CALIBRATION: 0.9+ only for textbook setups with multiple confluences. 0.7–0.8 for good setups. 0.6–0.7 for decent setups with some confluence. Below 0.6 = WAIT."""
 
 
 @dataclass
@@ -240,7 +240,7 @@ AVAILABLE CAPITAL: ₹{capital:,.2f}
 {lessons}
 
 Based on the above, identify the single best trade opportunity right now, or decide to WAIT if no high-quality setup exists.
-Remember: it is always better to WAIT than to force a trade. Only trade when confidence >= 0.75."""
+Remember: it is always better to WAIT than to force a trade. Only trade when confidence >= 0.60."""
 
     def _extract_text(self, response) -> str:
         for block in response.content:
