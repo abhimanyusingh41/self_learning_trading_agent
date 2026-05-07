@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trading Agent Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<!-- Topbar -->
+<div class="topbar">
+  <div class="topbar-title">Trading <span>Agent</span> Dashboard</div>
+  <div class="topbar-meta">
+    <span><span class="status-dot"></span> Live</span>
+    <span id="last-updated">—</span>
+  </div>
+</div>
+
+<!-- Summary Strip -->
+<div class="summary-strip">
+  <div class="summary-item">
+    <div class="summary-label">All-Time P&amp;L</div>
+    <div class="summary-value" id="total-pnl">—</div>
+  </div>
+  <div class="summary-item">
+    <div class="summary-label">Today's P&amp;L</div>
+    <div class="summary-value" id="today-pnl">—</div>
+  </div>
+  <div class="summary-item">
+    <div class="summary-label">Today's Trades</div>
+    <div class="summary-value" id="today-trades">—</div>
+  </div>
+  <div class="summary-item">
+    <div class="summary-label">Open Positions</div>
+    <div class="summary-value" id="open-positions">—</div>
+  </div>
+  <div class="summary-item">
+    <div class="summary-label">Win Rate</div>
+    <div class="summary-value" id="win-rate">—</div>
+  </div>
+  <div class="summary-item">
+    <div class="summary-label">Trades (W/L)</div>
+    <div class="summary-value" id="total-trades">—</div>
+  </div>
+  <div class="summary-item">
+    <div class="summary-label">Lessons Learned</div>
+    <div class="summary-value" id="lessons-count">—</div>
+  </div>
+</div>
+
+<!-- Main Content -->
+<div class="main">
+
+  <!-- Open Positions -->
+  <div>
+    <div class="section-header" id="positions-header">
+      Open Positions <span class="count">0</span>
+    </div>
+    <div class="cards-grid" id="positions-grid">
+      <div class="empty">Loading...</div>
+    </div>
+  </div>
+
+  <!-- Trade History -->
+  <div>
+    <div class="section-header">Trade History</div>
+    <div class="table-wrap">
+      <div class="table-toolbar">
+        <input type="date" id="filter-date" title="Filter by date">
+        <input type="text" id="filter-symbol" placeholder="Symbol..." style="width:120px">
+        <select id="filter-action">
+          <option value="">All Actions</option>
+          <option value="BUY">BUY</option>
+          <option value="SELL">SELL</option>
+          <option value="SHORT">SHORT</option>
+          <option value="COVER">COVER</option>
+        </select>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Exit Time</th>
+              <th>Symbol</th>
+              <th>Action</th>
+              <th>Entry</th>
+              <th>Exit</th>
+              <th>Qty</th>
+              <th>P&amp;L</th>
+              <th>Setup</th>
+              <th>Reason</th>
+            </tr>
+          </thead>
+          <tbody id="trades-tbody">
+            <tr><td colspan="9" class="empty">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lessons + Logs side by side -->
+  <div class="two-col">
+
+    <!-- Lessons Learned -->
+    <div>
+      <div class="section-header">Lessons Learned by Agent</div>
+      <div class="lessons-list" id="lessons-list">
+        <div class="empty">Loading...</div>
+      </div>
+    </div>
+
+    <!-- Live Logs -->
+    <div>
+      <div class="section-header">Live Logs</div>
+      <div class="log-box" id="log-box">Loading...</div>
+    </div>
+
+  </div>
+
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
