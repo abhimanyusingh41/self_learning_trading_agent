@@ -213,7 +213,7 @@ async function loadLogs() {
       else if (l.includes("warning") || l.includes("warn") || l.includes("blocked")) cls = "log-warn";
       else if (l.includes("trade") || l.includes("order") || l.includes("buy") || l.includes("sell") || l.includes("pnl")) cls = "log-trade";
       return `<div class="${cls}">${escHtml(line)}</div>`;
-    }).join("");
+    }).join("") + '<div style="height:32px"></div>';
 
     box.scrollTop = box.scrollHeight;
   } catch (e) {
