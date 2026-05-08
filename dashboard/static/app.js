@@ -28,7 +28,9 @@ async function loadSummary() {
     if (d.mcx_value != null) set("mcx-value", `₹${fmtINR(d.mcx_value)}`, colorClass(d.mcx_value - 50000));
     if (d.crypto_usdt != null) set("crypto-usdt", `$${fmtINR(d.crypto_usdt)}`, colorClass(d.crypto_usdt - 500));
     set("total-pnl", `₹${fmtINR(d.total_pnl)}`, colorClass(d.total_pnl));
-    set("today-pnl", `${pnlSign(d.today_pnl)}₹${fmtINR(d.today_pnl)}`, colorClass(d.today_pnl));
+    set("today-pnl-nse", `${pnlSign(d.today_pnl_nse)}₹${fmtINR(d.today_pnl_nse)}`, colorClass(d.today_pnl_nse));
+    set("today-pnl-mcx", `${pnlSign(d.today_pnl_mcx)}₹${fmtINR(d.today_pnl_mcx)}`, colorClass(d.today_pnl_mcx));
+    set("today-pnl-crypto", `${pnlSign(d.today_pnl_crypto_usd)}$${fmtINR(d.today_pnl_crypto_usd)}`, colorClass(d.today_pnl_crypto_usd));
     set("today-trades", d.today_trades, "blue");
     set("open-positions", d.open_positions, "blue");
     set("win-rate", `${d.win_rate}%`, d.win_rate >= 50 ? "green" : "red");

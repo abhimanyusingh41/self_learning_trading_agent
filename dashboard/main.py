@@ -48,6 +48,9 @@ async def index(request: Request, _=Depends(require_auth)):
     return templates.TemplateResponse(request=request, name="index.html")
 
 
+USD_INR_RATE = 84  # approximate rate for converting crypto USDT PnL to INR
+
+
 @app.get("/api/summary")
 async def summary(_=Depends(require_auth)):
     data = load_memory()
@@ -55,17 +58,22 @@ async def summary(_=Depends(require_auth)):
     total = stats.get("total_trades", 0)
     wins = stats.get("winning_trades", 0)
     losses = stats.get("losing_trades", 0)
-    pnl = stats.get("total_pnl", 0.0)
     win_rate = round(wins / total * 100, 1) if total > 0 else 0.0
 
     open_trades = [t for t in data["trades"] if t.get("status") == "open"]
-    today_ist = datetime.now(IST).date().isoformat()
-    today_trades = [
-        t for t in data["trades"]
-        if t.get("status") == "closed" and (t.get("exit_time", "") or "").startswith(today_ist)
-    ]
-    today_pnl = sum(t.get("pnl", 0) for t in today_trades)
+    closed_trades = [t for t in data["trades"] if t.get("status") == "closed"]
 
+    # All-time PnL: crypto PnL is in USDT — convert to INR for a unified total
+    inr_pnl = sum(t.get("pnl", 0) for t in closed_trades if t.get("asset_class") != "crypto")
+    crypto_pnl_usd = sum(t.get("pnl", 0) for t in closed_trades if t.get("asset_class") == "crypto")
+    total_pnl_inr = round(inr_pnl + crypto_pnl_usd * USD_INR_RATE, 2)
+
+    # Today's PnL per pool
+    today_ist = datetime.now(IST).date().isoformat()
+    today_trades = [t for t in closed_trades if (t.get("exit_time", "") or "").startswith(today_ist)]
+    today_pnl_nse = round(sum(t.get("pnl", 0) for t in today_trades if t.get("asset_class") in ("option", "equity")), 2)
+    today_pnl_mcx = round(sum(t.get("pnl", 0) for t in today_trades if t.get("asset_class") == "mcx"), 2)
+    today_pnl_crypto_usd = round(sum(t.get("pnl", 0) for t in today_trades if t.get("asset_class") == "crypto"), 2)
     today_brokerage = sum(t.get("brokerage", 0) for t in today_trades)
 
     return {
@@ -74,9 +82,11 @@ async def summary(_=Depends(require_auth)):
         "nse_value": stats.get("nse_value"),
         "mcx_value": stats.get("mcx_value"),
         "crypto_usdt": stats.get("crypto_usdt"),
-        "total_pnl": pnl,
+        "total_pnl": total_pnl_inr,
         "total_brokerage": stats.get("total_brokerage", 0.0),
-        "today_pnl": round(today_pnl, 2),
+        "today_pnl_nse": today_pnl_nse,
+        "today_pnl_mcx": today_pnl_mcx,
+        "today_pnl_crypto_usd": today_pnl_crypto_usd,
         "today_brokerage": round(today_brokerage, 2),
         "today_trades": len(today_trades),
         "open_positions": len(open_trades),

@@ -341,7 +341,7 @@ class TradingAgent:
                 "key_risks": decision.key_risks,
                 "setup_type": decision.setup_type,
                 "time_horizon": decision.time_horizon,
-                "asset_class": "option" if is_option else ("crypto" if is_crypto else "equity"),
+                "asset_class": "option" if is_option else ("crypto" if is_crypto else ("mcx" if is_mcx else "equity")),
                 "market_context_snapshot": self._last_market_context[:2000],
                 "order_id": result.order_id,
                 **extra,
