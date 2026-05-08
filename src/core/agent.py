@@ -312,7 +312,7 @@ class TradingAgent:
         else:
             logger.error(f"Order failed: {result.message}")
 
-    def _check_exit_conditions(self, now_ist: datetime):
+    def _check_exit_conditions(self, now_ist: datetime, options_only: bool = False):
         """Check all open trades for SL/target hits or EOD close."""
         open_trades = self.memory.get_open_trades()
 
@@ -320,6 +320,9 @@ class TradingAgent:
             symbol = trade["symbol"]
             is_crypto = symbol in self._crypto_symbols
             is_option = self._is_option_symbol(symbol)
+
+            if options_only and not is_option:
+                continue
 
             # Get price from right executor / data source
             if is_option:
@@ -557,17 +560,41 @@ class TradingAgent:
                     "lesson_tag": "operational",
                 })
 
-    def run_scheduler(self, interval_minutes: int = 15):
-        """Run continuously, calling run_once() every interval_minutes."""
+    def run_scheduler(self, interval_minutes: int = 10):
+        """
+        Two-speed loop:
+          - Every 3 min: fast options SL/target check only
+          - Every 10 min: full cycle (brain analysis + all exit checks + new trades)
+        """
         self._running = True
-        logger.info(f"Agent started — analysis interval: {interval_minutes} min")
+        logger.info(f"Agent started — full cycle: {interval_minutes} min | options SL check: 3 min")
         self._cleanup_orphaned_trades()
+
+        FULL_CYCLE_SECS = interval_minutes * 60
+        OPTIONS_CHECK_SECS = 3 * 60
+        last_full_run = 0.0  # force immediate full run on startup
+
         while self._running:
+            loop_start = time.time()
+            now_ist = datetime.now(IST)
+
+            # Fast options SL/target check — runs every 3 min
             try:
-                self.run_once()
+                self._check_exit_conditions(now_ist, options_only=True)
             except Exception as e:
-                logger.error(f"Agent cycle error: {e}", exc_info=True)
-            time.sleep(interval_minutes * 60)
+                logger.error(f"Options exit check error: {e}", exc_info=True)
+
+            # Full cycle — runs every 10 min
+            if loop_start - last_full_run >= FULL_CYCLE_SECS:
+                try:
+                    self.run_once()
+                    last_full_run = loop_start
+                except Exception as e:
+                    logger.error(f"Agent cycle error: {e}", exc_info=True)
+                    last_full_run = loop_start  # avoid rapid retries on persistent error
+
+            elapsed = time.time() - loop_start
+            time.sleep(max(0, OPTIONS_CHECK_SECS - elapsed))
 
     def stop(self):
         self._running = False
