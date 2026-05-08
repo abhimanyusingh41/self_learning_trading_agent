@@ -213,9 +213,9 @@ async function loadLogs() {
       else if (l.includes("warning") || l.includes("warn") || l.includes("blocked")) cls = "log-warn";
       else if (l.includes("trade") || l.includes("order") || l.includes("buy") || l.includes("sell") || l.includes("pnl")) cls = "log-trade";
       return `<div class="${cls}">${escHtml(line)}</div>`;
-    }).join("") + '<div style="height:32px"></div>';
+    }).join("");
 
-    box.scrollTop = box.scrollHeight;
+    requestAnimationFrame(() => { box.scrollTop = box.scrollHeight; });
   } catch (e) {
     console.error("Logs load error:", e);
   }
