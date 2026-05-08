@@ -537,26 +537,76 @@ class TradingAgent:
         return symbol in mcx_symbols
 
     def _cleanup_orphaned_trades(self):
-        """Close any memory trades whose positions no longer exist in the executor (e.g. after restart)."""
+        """
+        On restart the executor's positions dict is empty, but memory still has open trades.
+        - Option positions  → restore into executor so they keep being tracked
+        - Crypto positions  → restore into binance_paper
+        - Old equity stocks → cancel (these are from pre-options code, no longer valid)
+        """
         open_trades = self.memory.get_open_trades()
         if not open_trades:
             return
 
-        active_symbols = {p.get("symbol") for p in self.executor.get_open_positions()}
-        if hasattr(self.executor, "binance_paper"):
-            active_symbols |= {p.get("symbol") for p in self.executor.binance_paper.get_open_positions()}
-
         for trade in open_trades:
             symbol = trade["symbol"]
-            if symbol not in active_symbols:
-                logger.warning(f"Orphaned trade in memory: {symbol} ({trade['trade_id']}) — marking cancelled")
+            is_crypto = symbol in self._crypto_symbols
+            is_option = self._is_option_symbol(symbol)
+            entry_price = float(trade.get("entry_price", 0))
+            quantity = trade.get("quantity", 0)
+
+            if is_option:
+                # Rebuild the position in PaperTrader so SL/target checks keep working
+                self.executor.positions[symbol] = {
+                    "symbol": symbol,
+                    "action": trade.get("action", "BUY"),
+                    "quantity": int(quantity),
+                    "entry_price": entry_price,
+                    "stop_loss": float(trade.get("stop_loss", 0)),
+                    "target": float(trade.get("target_1", 0)),
+                    "order_id": trade.get("order_id", "restored"),
+                    "entry_time": trade.get("entry_time", ""),
+                }
+                # Deduct entry cost so portfolio value stays accurate
+                cost = entry_price * int(quantity) + 20.0
+                self.executor.cash = max(0.0, self.executor.cash - cost)
+                logger.info(
+                    f"Restored option position: {symbol} | {quantity} units @ ₹{entry_price:.2f} | "
+                    f"₹{cost:.0f} deducted from cash"
+                )
+
+            elif is_crypto and hasattr(self.executor, "binance_paper"):
+                qty = float(quantity)
+                self.executor.binance_paper.positions[symbol] = {
+                    "symbol": symbol,
+                    "action": trade.get("action", "BUY"),
+                    "quantity": qty,
+                    "entry_price": entry_price,
+                    "stop_loss": float(trade.get("stop_loss", 0)),
+                    "target": float(trade.get("target_1", 0)),
+                    "order_id": trade.get("order_id", "restored"),
+                    "entry_time": trade.get("entry_time", ""),
+                }
+                cost = entry_price * qty
+                self.executor.binance_paper.usdt_balance = max(
+                    0.0, self.executor.binance_paper.usdt_balance - cost
+                )
+                logger.info(
+                    f"Restored crypto position: {symbol} | {qty} @ {entry_price:.4f} | "
+                    f"{cost:.4f} USDT deducted"
+                )
+
+            else:
+                # Old non-option equity trade — cancel cleanly
+                logger.warning(
+                    f"Cancelling obsolete equity trade: {symbol} ({trade['trade_id']}) — not valid in options-only mode"
+                )
                 self.memory.record_trade_exit(trade["trade_id"], {
                     "exit_price": trade.get("entry_price", 0),
-                    "exit_reason": "cancelled_on_restart",
+                    "exit_reason": "cancelled_obsolete_equity",
                     "pnl": 0.0,
                     "brokerage": 0.0,
                     "gross_pnl": 0.0,
-                    "lesson": "Trade orphaned after agent restart — position lost.",
+                    "lesson": "Non-option equity trade removed after switch to options-only mode.",
                     "lesson_tag": "operational",
                 })
 
