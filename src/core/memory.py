@@ -27,6 +27,7 @@ class TradeMemory:
                 "winning_trades": 0,
                 "losing_trades": 0,
                 "total_pnl": 0.0,
+                "total_brokerage": 0.0,
                 "best_trade_pnl": 0.0,
                 "worst_trade_pnl": 0.0,
             },
@@ -60,16 +61,18 @@ class TradeMemory:
                     **exit_data,
                 })
                 pnl = exit_data.get("pnl", 0.0)
-                self._update_stats(pnl)
+                brokerage = exit_data.get("brokerage", 0.0)
+                self._update_stats(pnl, brokerage)
                 self._save()
                 return trade
         logger.warning(f"Trade {trade_id} not found in memory")
         return None
 
-    def _update_stats(self, pnl: float):
+    def _update_stats(self, pnl: float, brokerage: float = 0.0):
         stats = self._data["stats"]
         stats["total_trades"] += 1
         stats["total_pnl"] = round(stats["total_pnl"] + pnl, 2)
+        stats["total_brokerage"] = round(stats.get("total_brokerage", 0.0) + brokerage, 2)
         if pnl > 0:
             stats["winning_trades"] += 1
             stats["best_trade_pnl"] = max(stats["best_trade_pnl"], pnl)
@@ -104,12 +107,12 @@ class TradeMemory:
         if total == 0:
             return "No completed trades yet."
         win_rate = round(s["winning_trades"] / total * 100, 1)
+        brokerage = s.get("total_brokerage", 0.0)
         return (
             f"Total trades: {total} | Win rate: {win_rate}% "
             f"({s['winning_trades']}W/{s['losing_trades']}L) | "
-            f"Total PnL: ₹{s['total_pnl']:,.2f} | "
-            f"Best: ₹{s['best_trade_pnl']:,.2f} | "
-            f"Worst: ₹{s['worst_trade_pnl']:,.2f}"
+            f"Net PnL: ₹{s['total_pnl']:,.2f} | Brokerage paid: ₹{brokerage:,.2f} | "
+            f"Best: ₹{s['best_trade_pnl']:,.2f} | Worst: ₹{s['worst_trade_pnl']:,.2f}"
         )
 
     def get_open_trades(self) -> list:

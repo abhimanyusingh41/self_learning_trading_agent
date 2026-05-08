@@ -20,7 +20,7 @@
 <!-- Summary Strip -->
 <div class="summary-strip">
   <div class="summary-item">
-    <div class="summary-label">All-Time P&amp;L</div>
+    <div class="summary-label">All-Time P&amp;L (Net)</div>
     <div class="summary-value" id="total-pnl">—</div>
   </div>
   <div class="summary-item">
@@ -42,6 +42,10 @@
   <div class="summary-item">
     <div class="summary-label">Trades (W/L)</div>
     <div class="summary-value" id="total-trades">—</div>
+  </div>
+  <div class="summary-item">
+    <div class="summary-label">Brokerage Paid</div>
+    <div class="summary-value" id="total-brokerage">—</div>
   </div>
   <div class="summary-item">
     <div class="summary-label">Lessons Learned</div>
@@ -87,13 +91,15 @@
               <th>Entry</th>
               <th>Exit</th>
               <th>Qty</th>
-              <th>P&amp;L</th>
+              <th>Gross P&amp;L</th>
+              <th>Brokerage</th>
+              <th>Net P&amp;L</th>
               <th>Setup</th>
               <th>Reason</th>
             </tr>
           </thead>
           <tbody id="trades-tbody">
-            <tr><td colspan="9" class="empty">Loading...</td></tr>
+            <tr><td colspan="11" class="empty">Loading...</td></tr>
           </tbody>
         </table>
       </div>

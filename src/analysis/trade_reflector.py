@@ -29,18 +29,25 @@ class TradeReflector:
 
         # Calculate P&L
         entry_price = float(trade.get("entry_price", 0))
-        quantity = int(trade.get("quantity", 0))
+        quantity = float(trade.get("quantity", 0))
         action = trade.get("action", "BUY")
+        asset_class = trade.get("asset_class", "equity")
 
         if action in ("BUY", "COVER"):
-            pnl = (exit_price - entry_price) * quantity
+            gross_pnl = (exit_price - entry_price) * quantity
         else:  # SHORT/SELL
-            pnl = (entry_price - exit_price) * quantity
+            gross_pnl = (entry_price - exit_price) * quantity
+
+        # Brokerage: ₹20 per trade leg for NSE equities (₹40 round trip)
+        brokerage = 40.0 if asset_class == "equity" else 0.0
+        net_pnl = gross_pnl - brokerage
 
         exit_data = {
             "exit_price": exit_price,
             "exit_reason": exit_reason,
-            "pnl": round(pnl, 2),
+            "gross_pnl": round(gross_pnl, 2),
+            "brokerage": brokerage,
+            "pnl": round(net_pnl, 2),  # net after brokerage — what's stored in stats
         }
 
         closed_trade = self.memory.record_trade_exit(trade_id, exit_data)
@@ -49,7 +56,8 @@ class TradeReflector:
 
         logger.info(
             f"Trade {trade_id} closed | {trade.get('symbol')} | "
-            f"PnL: ₹{pnl:,.2f} | Reason: {exit_reason}"
+            f"Gross: ₹{gross_pnl:,.2f} | Brokerage: ₹{brokerage:.0f} | "
+            f"Net PnL: ₹{net_pnl:,.2f} | Reason: {exit_reason}"
         )
 
         # Run LLM reflection

@@ -30,6 +30,7 @@ async function loadSummary() {
     set("open-positions", d.open_positions, "blue");
     set("win-rate", `${d.win_rate}%`, d.win_rate >= 50 ? "green" : "red");
     set("total-trades", `${d.winning_trades}W / ${d.losing_trades}L`, "");
+    set("total-brokerage", `₹${fmtINR(d.total_brokerage ?? 0)}`, "red");
     set("lessons-count", d.lessons_count, "blue");
 
     document.getElementById("last-updated").textContent = "Updated " + toIST(new Date().toISOString());
@@ -120,13 +121,15 @@ async function loadTrades() {
     const tbody = document.getElementById("trades-tbody");
 
     if (!trades.length) {
-      tbody.innerHTML = '<tr><td colspan="9" class="empty">No trades found</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="11" class="empty">No trades found</td></tr>';
       return;
     }
 
     tbody.innerHTML = trades.map(t => {
-      const pnl = t.pnl ?? 0;
-      const rowCls = pnl > 0 ? "win" : pnl < 0 ? "loss" : "";
+      const netPnl = t.pnl ?? 0;
+      const grossPnl = t.gross_pnl ?? netPnl;
+      const brok = t.brokerage ?? 0;
+      const rowCls = netPnl > 0 ? "win" : netPnl < 0 ? "loss" : "";
       return `
         <tr class="${rowCls}">
           <td>${toIST(t.exit_time)}</td>
@@ -135,7 +138,9 @@ async function loadTrades() {
           <td>₹${fmtINR(t.entry_price)}</td>
           <td>₹${fmtINR(t.exit_price)}</td>
           <td>${t.quantity ?? "—"}</td>
-          <td class="${pnlClass(pnl)}">${pnlSign(pnl)}₹${fmtINR(pnl)}</td>
+          <td class="${pnlClass(grossPnl)}">${pnlSign(grossPnl)}₹${fmtINR(grossPnl)}</td>
+          <td style="color:var(--muted)">₹${fmtINR(brok)}</td>
+          <td class="${pnlClass(netPnl)}"><b>${pnlSign(netPnl)}₹${fmtINR(netPnl)}</b></td>
           <td><span class="tag">${t.setup_type || "—"}</span></td>
           <td style="color:var(--muted);font-size:11px">${t.exit_reason || "—"}</td>
         </tr>`;

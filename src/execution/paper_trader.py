@@ -6,7 +6,8 @@ from loguru import logger
 from src.execution.executor import BaseExecutor, OrderResult
 
 
-SLIPPAGE_PCT = 0.0005  # 0.05% slippage assumption
+SLIPPAGE_PCT = 0.0005        # 0.05% slippage assumption
+BROKERAGE_PER_TRADE = 20.0   # ₹20 flat per trade leg (NSE equities, Zerodha-style)
 
 
 class PaperTrader(BaseExecutor):
@@ -16,6 +17,7 @@ class PaperTrader(BaseExecutor):
         self.positions: dict[str, dict] = {}  # symbol -> position dict
         self.trade_log: list[dict] = []
         self.daily_pnl: float = 0.0
+        self.total_brokerage: float = 0.0
         self._price_cache: dict[str, float] = {}
 
     def set_price_feed(self, price_fn):
@@ -56,13 +58,17 @@ class PaperTrader(BaseExecutor):
         trade_value = exec_price * quantity
 
         if action in ("BUY", "COVER"):
-            if trade_value > self.cash:
+            total_cost = trade_value + BROKERAGE_PER_TRADE
+            if total_cost > self.cash:
                 return OrderResult(
                     False, None, symbol, action, quantity, exec_price,
-                    f"Insufficient cash: need ₹{trade_value:.0f}, have ₹{self.cash:.0f}"
+                    f"Insufficient cash: need ₹{total_cost:.0f} (incl. ₹{BROKERAGE_PER_TRADE:.0f} brokerage), have ₹{self.cash:.0f}"
                 )
-            self.cash -= trade_value
+            self.cash -= total_cost
+        else:
+            self.cash -= BROKERAGE_PER_TRADE
 
+        self.total_brokerage += BROKERAGE_PER_TRADE
         order_id = str(uuid.uuid4())[:10]
 
         if action in ("BUY", "SHORT"):
@@ -85,10 +91,11 @@ class PaperTrader(BaseExecutor):
             "action": action,
             "quantity": quantity,
             "price": exec_price,
+            "brokerage": BROKERAGE_PER_TRADE,
             "time": datetime.now().isoformat(),
         })
 
-        logger.info(f"[PAPER] {action} {quantity} {symbol} @ ₹{exec_price:.2f}")
+        logger.info(f"[PAPER] {action} {quantity} {symbol} @ ₹{exec_price:.2f} | Brokerage: ₹{BROKERAGE_PER_TRADE:.0f}")
         return OrderResult(True, order_id, symbol, action, quantity, exec_price, "Paper order filled")
 
     def close_position(
@@ -107,40 +114,49 @@ class PaperTrader(BaseExecutor):
         exit_action = "SELL" if action == "BUY" else "COVER"
         exec_price = current_price * (1 - SLIPPAGE_PCT if exit_action == "SELL" else 1 + SLIPPAGE_PCT)
 
-        pnl = self._close_position_internal(symbol, exec_price, reason)
+        gross_pnl, net_pnl = self._close_position_internal(symbol, exec_price, reason)
         order_id = str(uuid.uuid4())[:10]
 
-        logger.info(f"[PAPER] {exit_action} {pos['quantity']} {symbol} @ ₹{exec_price:.2f} | PnL: ₹{pnl:.2f} | {reason}")
+        logger.info(
+            f"[PAPER] {exit_action} {pos['quantity']} {symbol} @ ₹{exec_price:.2f} | "
+            f"Gross PnL: ₹{gross_pnl:.2f} | Brokerage: ₹{BROKERAGE_PER_TRADE:.0f} | "
+            f"Net PnL: ₹{net_pnl:.2f} | {reason}"
+        )
         return OrderResult(True, order_id, symbol, exit_action, pos["quantity"], exec_price, f"Closed: {reason}")
 
-    def _close_position_internal(self, symbol: str, exit_price: float, reason: str) -> float:
+    def _close_position_internal(self, symbol: str, exit_price: float, reason: str) -> tuple[float, float]:
         pos = self.positions.pop(symbol, None)
         if not pos:
-            return 0.0
+            return 0.0, 0.0
 
         qty = pos["quantity"]
         entry = pos["entry_price"]
         action = pos["action"]
 
         if action == "BUY":
-            pnl = (exit_price - entry) * qty
-            self.cash += exit_price * qty
+            gross_pnl = (exit_price - entry) * qty
         else:  # SHORT
-            pnl = (entry - exit_price) * qty
-            self.cash += exit_price * qty  # return borrowed shares' value
+            gross_pnl = (entry - exit_price) * qty
 
-        self.daily_pnl += pnl
+        # Deduct exit-side brokerage from cash
+        self.cash += exit_price * qty - BROKERAGE_PER_TRADE
+        self.total_brokerage += BROKERAGE_PER_TRADE
+        net_pnl = gross_pnl - BROKERAGE_PER_TRADE  # exit side; entry was deducted at order time
+
+        self.daily_pnl += gross_pnl  # daily_pnl tracks gross; brokerage tracked separately
         self.trade_log.append({
             "symbol": symbol,
             "action": "CLOSE",
             "entry": entry,
             "exit": exit_price,
             "quantity": qty,
-            "pnl": round(pnl, 2),
+            "gross_pnl": round(gross_pnl, 2),
+            "brokerage": BROKERAGE_PER_TRADE,
+            "pnl": round(net_pnl, 2),
             "reason": reason,
             "time": datetime.now().isoformat(),
         })
-        return pnl
+        return gross_pnl, net_pnl
 
     def get_portfolio_value(self) -> float:
         unrealised = sum(
@@ -165,6 +181,7 @@ class PaperTrader(BaseExecutor):
             f"Cash: ₹{self.cash:,.2f}",
             f"Portfolio Value: ₹{self.get_portfolio_value():,.2f}",
             f"Daily PnL: ₹{self.daily_pnl:,.2f}",
+            f"Total Brokerage Paid: ₹{self.total_brokerage:,.2f}",
             f"Open Positions: {len(self.positions)}",
         ]
         for sym, pos in self.positions.items():
