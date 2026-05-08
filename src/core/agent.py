@@ -164,11 +164,15 @@ class TradingAgent:
                 logger.warning(f"Already have open crypto position in {symbol} — skipping duplicate entry")
                 return
 
-        # Risk check — options, crypto, and equity each have their own limits
+        # Risk check — skip for exit actions (SELL/COVER always allowed)
+        # Only apply risk limits to new entries (BUY/SHORT)
         is_crypto_trade = symbol in self._crypto_symbols
         is_option_trade = self._is_option_symbol(symbol)
 
-        if is_crypto_trade:
+        if decision.action in ("SELL", "COVER"):
+            pass  # exit trades always allowed through — no risk check needed
+
+        elif is_crypto_trade:
             # For crypto use USDT balance and skip INR-based risk limits
             if hasattr(self.executor, "binance_paper"):
                 crypto_capital = self.executor.binance_paper.get_portfolio_value()
