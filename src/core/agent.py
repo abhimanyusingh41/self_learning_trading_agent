@@ -107,17 +107,42 @@ class TradingAgent:
             logger.warning(f"Brain picked MCX symbol {symbol} but MCX is closed — skipping")
             return
 
-        # Risk check
+        # Risk check — use USDT balance for crypto, INR capital for equities
         open_positions = self.executor.get_open_positions()
-        risk_result = self.risk.check_trade(
-            action=decision.action,
-            entry_price=decision.entry_price or 0,
-            stop_loss=decision.stop_loss or 0,
-            quantity=decision.quantity or 0,
-            current_capital=capital,
-            daily_pnl=daily_pnl,
-            open_positions=open_positions,
-        )
+        is_crypto_trade = symbol in self._crypto_symbols
+
+        if is_crypto_trade:
+            # For crypto use USDT balance and skip INR-based risk limits
+            if hasattr(self.executor, "binance_paper"):
+                crypto_capital = self.executor.binance_paper.get_portfolio_value()
+            elif hasattr(self.executor, "binance_live"):
+                crypto_capital = self.executor.binance_live.get_portfolio_value()
+            else:
+                crypto_capital = capital * 0.2  # fallback: 20% of INR capital
+
+            crypto_positions = []
+            if hasattr(self.executor, "binance_paper"):
+                crypto_positions = self.executor.binance_paper.get_open_positions()
+
+            risk_result = self.risk.check_trade(
+                action=decision.action,
+                entry_price=decision.entry_price or 0,
+                stop_loss=decision.stop_loss or 0,
+                quantity=decision.quantity or 0,
+                current_capital=crypto_capital,
+                daily_pnl=0,
+                open_positions=crypto_positions,
+            )
+        else:
+            risk_result = self.risk.check_trade(
+                action=decision.action,
+                entry_price=decision.entry_price or 0,
+                stop_loss=decision.stop_loss or 0,
+                quantity=decision.quantity or 0,
+                current_capital=capital,
+                daily_pnl=daily_pnl,
+                open_positions=open_positions,
+            )
 
         if not risk_result.allowed:
             logger.warning(f"Risk check BLOCKED trade: {risk_result.reason}")
@@ -221,7 +246,7 @@ class TradingAgent:
 
                 result = exec_target.close_position(
                     symbol=symbol,
-                    quantity=int(trade["quantity"]),
+                    quantity=float(trade["quantity"]),
                     current_price=current_price,
                     reason=close_reason,
                 )

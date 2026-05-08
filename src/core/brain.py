@@ -86,7 +86,7 @@ You MUST respond with ONLY valid JSON in this exact structure:
 {
   "action": "BUY | SELL | SHORT | COVER | HOLD | WAIT",
   "symbol": "SYMBOL or null",
-  "quantity": integer or null,
+  "quantity": number or null,
   "entry_price": float or null,
   "stop_loss": float or null,
   "target_1": float or null,
@@ -98,6 +98,11 @@ You MUST respond with ONLY valid JSON in this exact structure:
   "setup_type": "breakout | breakdown | reversal | momentum | mean_reversion | trend_continuation | null"
 }
 
+QUANTITY RULES:
+- Indian equities (NSE): whole number of shares (e.g. 10, 50, 100)
+- MCX commodities: whole number of lots (e.g. 1, 2)
+- Crypto (Binance USDT pairs): decimal units — size based on USDT budget (e.g. BTC: 0.001–0.01, ETH: 0.01–0.1, SOL/XRP/BNB: 1–10). Never return 1 for BTC/ETH — they cost thousands of dollars each.
+
 When action is HOLD or WAIT, set symbol/quantity/prices to null.
 CONFIDENCE CALIBRATION: 0.9+ only for textbook setups with multiple confluences. 0.7–0.8 for good setups. 0.6–0.7 for decent setups with some confluence. Below 0.6 = WAIT."""
 
@@ -106,7 +111,7 @@ CONFIDENCE CALIBRATION: 0.9+ only for textbook setups with multiple confluences.
 class TradeDecision:
     action: str
     symbol: Optional[str]
-    quantity: Optional[int]
+    quantity: Optional[float]
     entry_price: Optional[float]
     stop_loss: Optional[float]
     target_1: Optional[float]

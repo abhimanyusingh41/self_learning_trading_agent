@@ -37,9 +37,12 @@ class BinancePaperTrader(BaseExecutor):
         target: float,
         exchange: str = "BINANCE",
     ) -> OrderResult:
-        qty = float(quantity)
+        qty = round(float(quantity), 8)  # crypto supports 8 decimal places
         exec_price = price * (1 + SLIPPAGE_PCT) if action == "BUY" else price * (1 - SLIPPAGE_PCT)
         trade_value = exec_price * qty
+
+        if qty <= 0:
+            return OrderResult(False, None, symbol, action, quantity, exec_price, "Quantity must be > 0")
 
         if action == "BUY":
             if trade_value > self.usdt_balance:
