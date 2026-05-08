@@ -23,7 +23,6 @@ risk:
   nse_capital: 50000        # INR for NSE options (NFO)
   mcx_capital: 50000        # INR for MCX commodities
   crypto_capital_usdt: 500  # USDT for Binance crypto
-  usd_inr_rate: 84          # used to convert crypto USDT PnL to INR for all-time total
 
 instruments:
   # Underlying stocks for option trading (actual trades go to NFO segment)

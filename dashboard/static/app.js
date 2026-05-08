@@ -27,7 +27,9 @@ async function loadSummary() {
     if (d.nse_value != null) set("nse-value", `₹${fmtINR(d.nse_value)}`, colorClass(d.nse_value - 50000));
     if (d.mcx_value != null) set("mcx-value", `₹${fmtINR(d.mcx_value)}`, colorClass(d.mcx_value - 50000));
     if (d.crypto_usdt != null) set("crypto-usdt", `$${fmtINR(d.crypto_usdt)}`, colorClass(d.crypto_usdt - 500));
-    set("total-pnl", `₹${fmtINR(d.total_pnl)}`, colorClass(d.total_pnl));
+    set("alltime-pnl-nse", `${pnlSign(d.alltime_pnl_nse)}₹${fmtINR(d.alltime_pnl_nse)}`, colorClass(d.alltime_pnl_nse));
+    set("alltime-pnl-mcx", `${pnlSign(d.alltime_pnl_mcx)}₹${fmtINR(d.alltime_pnl_mcx)}`, colorClass(d.alltime_pnl_mcx));
+    set("alltime-pnl-crypto", `${pnlSign(d.alltime_pnl_crypto_usd)}$${fmtINR(d.alltime_pnl_crypto_usd)}`, colorClass(d.alltime_pnl_crypto_usd));
     set("today-pnl-nse", `${pnlSign(d.today_pnl_nse)}₹${fmtINR(d.today_pnl_nse)}`, colorClass(d.today_pnl_nse));
     set("today-pnl-mcx", `${pnlSign(d.today_pnl_mcx)}₹${fmtINR(d.today_pnl_mcx)}`, colorClass(d.today_pnl_mcx));
     set("today-pnl-crypto", `${pnlSign(d.today_pnl_crypto_usd)}$${fmtINR(d.today_pnl_crypto_usd)}`, colorClass(d.today_pnl_crypto_usd));
