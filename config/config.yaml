@@ -19,7 +19,10 @@ risk:
   max_trade_value_pct: 10.0
   options_max_trade_value_pct: 15.0  # allow slightly larger option premium outlays
   kill_switch: false
-  initial_capital: 100000
+  # Separate capital pools — each segment trades its own allocation independently
+  nse_capital: 50000        # INR for NSE options (NFO)
+  mcx_capital: 50000        # INR for MCX commodities
+  crypto_capital_usdt: 500  # USDT for Binance crypto
 
 instruments:
   # Underlying stocks for option trading (actual trades go to NFO segment)
@@ -51,8 +54,10 @@ instruments:
   commodities:
     - GOLD
     - GOLDM
+    - GOLDPETAL
     - SILVER
     - SILVERM
+    - SILVERMIC
   commodity_exchange: MCX
 
   # Crypto (Binance — USDT pairs)

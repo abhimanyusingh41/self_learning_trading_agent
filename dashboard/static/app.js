@@ -24,8 +24,9 @@ async function loadSummary() {
     const r = await fetch("/api/summary");
     const d = await r.json();
 
-    if (d.portfolio_value != null) set("portfolio-value", `₹${fmtINR(d.portfolio_value)}`, colorClass(d.portfolio_value - 100000));
-    if (d.cash != null) set("cash-balance", `₹${fmtINR(d.cash)}`, "blue");
+    if (d.nse_value != null) set("nse-value", `₹${fmtINR(d.nse_value)}`, colorClass(d.nse_value - 50000));
+    if (d.mcx_value != null) set("mcx-value", `₹${fmtINR(d.mcx_value)}`, colorClass(d.mcx_value - 50000));
+    if (d.crypto_usdt != null) set("crypto-usdt", `$${fmtINR(d.crypto_usdt)}`, colorClass(d.crypto_usdt - 500));
     set("total-pnl", `₹${fmtINR(d.total_pnl)}`, colorClass(d.total_pnl));
     set("today-pnl", `${pnlSign(d.today_pnl)}₹${fmtINR(d.today_pnl)}`, colorClass(d.today_pnl));
     set("today-trades", d.today_trades, "blue");

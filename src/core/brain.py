@@ -37,33 +37,40 @@ EXPERT_TRADER_SYSTEM_PROMPT = """You are an expert multi-asset trader with 20+ y
 
 **MCX Commodities (Gold/Silver):**
 - MCX hours: 09:00–23:30 IST (Mon–Fri); extended session tracks international markets
-- Gold (GOLD, GOLDM): safe haven — rallies on USD weakness, geopolitical risk, RBI buying, inflation fears
-- Silver (SILVER, SILVERM): industrial + precious metal — more volatile than gold; follows gold with leverage
+- Gold (GOLD, GOLDM, GOLDPETAL): safe haven — rallies on USD weakness, geopolitical risk, RBI buying, inflation fears
+- Silver (SILVER, SILVERM, SILVERMIC): industrial + precious metal — more volatile than gold; follows gold with leverage
 - Gold/Silver ratio: normal range 70–85; ratio >85 = silver cheap relative to gold; <70 = gold cheap
 - MCX prices in INR: impacted by both international spot price (USD) AND USD/INR exchange rate
 - Key drivers: COMEX gold futures, US CPI/Fed decisions, India import duty changes, festive demand (Oct–Nov)
-- Lot sizes: GOLD = 1 kg, GOLDM = 100g, SILVER = 30 kg, SILVERM = 5 kg — size positions accordingly
+- Lot sizes: GOLD = 1 kg | GOLDM = 100g | GOLDPETAL = 1g (~₹9,500/lot) | SILVER = 30 kg | SILVERM = 5 kg | SILVERMIC = 1 kg (~₹95,000/lot)
+- MCX capital pool is ₹50,000 — prefer GOLDPETAL (~₹9,500/lot) as it fits the capital; SILVERMIC (~₹95,000) exceeds capital, do not trade it
 - Never trade MCX commodities near budget day or RBI policy if unexpected news expected
 
-**Crypto (Binance — USDT pairs):**
+**Crypto (Binance — USDT pairs) — Dedicated $500 USDT pool:**
+- Dedicated crypto capital: $500 USDT — completely separate from INR pools, never mix
 - Crypto trades 24x7x365 — no session close, no circuit breakers
+- IMPORTANT: When NSE AND MCX are both closed, crypto is the ONLY available market — actively look for setups
+- Even during Indian market hours, crypto can be traded if a clear setup exists (it runs independently)
 - Bitcoin (BTC): digital gold, macro risk-on/risk-off asset; correlates with NASDAQ/tech stocks
 - Ethereum (ETH): smart contract platform; follows BTC with higher beta
 - Altcoins (SOL, BNB, XRP): higher risk, higher reward; rotate into alts after BTC rallies
 - Key crypto drivers: Fed rate decisions (risk-on/off), BTC ETF flows, whale wallet movements, on-chain data
 - BTC dominance rising = alts weak; BTC dominance falling = alt season
 - Funding rates: positive = market is long-heavy (potential squeeze down); negative = bearish (squeeze up)
-- Crypto volatility is 3–5x equity volatility — reduce position size by 50% vs equity trades
-- Avoid trading crypto during Indian market hours if equity/commodity setups are better (opportunity cost)
+- Crypto volatility is 3–5x equity volatility — use tighter position sizes
 - Cross-asset signal: Gold up + BTC up = risk-off AND inflation hedge demand; Gold up + BTC down = pure risk-off
+- Position sizes for $500 USDT budget: BTC 0.001–0.002 | ETH 0.02–0.05 | SOL 0.5–1.5 | XRP 50–150 | BNB 0.1–0.3
+- Stop loss: 2–3% for BTC/ETH; 3–5% for SOL/BNB/XRP; risk per trade max 2% of $500 = $10
+- Confidence threshold for crypto: 0.55 (slightly lower than equity; crypto has clearer technical patterns 24x7)
 
-**Risk Management (HARD RULES — NEVER VIOLATE):**
-- Max 0.5% of capital at risk per trade (position sized by stop loss distance)
-- Daily loss limit: 2% of capital — stop all trading if hit
-- Max 3 concurrent open positions
-- Max single trade value: 10% of capital
+**Risk Management per capital pool (HARD RULES — NEVER VIOLATE):**
+- NSE Options: agent enforces 3% of NSE capital (₹50,000) per trade — follow agent's risk constraints
+- MCX Commodities: Max 1% of MCX capital (₹50,000) at risk per trade = ₹500; max trade value ₹5,000
+- Crypto: Max 2% of $500 USDT = $10 at risk per trade; max position value $100 (20% of pool)
+- Daily loss limit: 2% of each pool's capital — stop trading that pool if hit
+- Max 3 concurrent open positions per pool
 - Always set stop loss BEFORE entry; never widen stops after entry
-- Risk:Reward minimum 1:2 (prefer 1:3)
+- Risk:Reward minimum 1:2 for NSE/MCX (prefer 1:3); minimum 1:1.5 for crypto acceptable
 - Pyramid into winners only, never average down losers
 - Cut losses fast, let winners run
 
@@ -105,8 +112,8 @@ You MUST respond with ONLY valid JSON in this exact structure:
 
 QUANTITY RULES:
 - NSE Stock Options (NFO): quantity = number of LOTS (e.g. 1, 2). The agent will multiply by lot_size automatically. NEVER exceed 2 lots per trade.
-- MCX commodities: whole number of lots (e.g. 1, 2)
-- Crypto (Binance USDT pairs): decimal units — size based on USDT budget (e.g. BTC: 0.001–0.01, ETH: 0.01–0.1, SOL/XRP/BNB: 1–10). Never return 1 for BTC/ETH — they cost thousands of dollars each.
+- MCX commodities: whole number of lots (e.g. 1, 2). For GOLDPETAL use 1–2 lots (~₹9,500–19,000). SILVERMIC exceeds ₹50k capital, do not trade it.
+- Crypto (Binance USDT pairs, $500 budget, max $100 per position): BTC: 0.001–0.002 | ETH: 0.02–0.05 | SOL: 0.5–1.5 | XRP: 50–150 | BNB: 0.1–0.3. Never return whole numbers like 1 for BTC/ETH.
 
 SYMBOL FORMAT: For options, symbol MUST be the EXACT tradingsymbol from the market context (e.g. "HDFCBANK26MAY785PE") — copy it exactly as shown in the TRADABLE OPTIONS list. Do NOT construct or guess the symbol format.
 
@@ -143,9 +150,11 @@ class TradingBrain:
         lessons_from_memory: str,
         portfolio_state: str,
         capital: float,
+        mcx_capital: float = 0.0,
+        crypto_usdt: float = 0.0,
     ) -> TradeDecision:
         prompt = self._build_analysis_prompt(
-            market_context, lessons_from_memory, portfolio_state, capital
+            market_context, lessons_from_memory, portfolio_state, capital, mcx_capital, crypto_usdt
         )
 
         try:
@@ -238,9 +247,18 @@ LESSON_TAG: <short tag>"""
         lessons: str,
         portfolio: str,
         capital: float,
+        mcx_capital: float = 0.0,
+        crypto_usdt: float = 0.0,
     ) -> str:
+        capital_lines = [f"- NSE Options pool: ₹{capital:,.2f}"]
+        if mcx_capital > 0:
+            capital_lines.append(f"- MCX Commodities pool: ₹{mcx_capital:,.2f}")
+        if crypto_usdt > 0:
+            capital_lines.append(f"- Crypto pool: ${crypto_usdt:,.2f} USDT")
+
         return f"""CURRENT DATE/TIME: {datetime.now().strftime('%Y-%m-%d %H:%M IST')}
-AVAILABLE CAPITAL: ₹{capital:,.2f}
+CAPITAL POOLS (each segment trades its own allocation independently):
+{chr(10).join(capital_lines)}
 
 === PORTFOLIO STATE ===
 {portfolio}
@@ -252,7 +270,9 @@ AVAILABLE CAPITAL: ₹{capital:,.2f}
 {lessons}
 
 Based on the above, identify the single best trade opportunity right now, or decide to WAIT if no high-quality setup exists.
-Remember: it is always better to WAIT than to force a trade. Only trade when confidence >= 0.60."""
+Remember: it is always better to WAIT than to force a trade.
+For NSE/MCX trades: only trade when confidence >= 0.60.
+For crypto trades: trade when confidence >= 0.55 and a clear technical setup exists (especially when NSE/MCX are closed)."""
 
     def _extract_text(self, response) -> str:
         for block in response.content:

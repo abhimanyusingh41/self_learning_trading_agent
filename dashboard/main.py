@@ -71,6 +71,9 @@ async def summary(_=Depends(require_auth)):
     return {
         "portfolio_value": stats.get("portfolio_value"),
         "cash": stats.get("cash"),
+        "nse_value": stats.get("nse_value"),
+        "mcx_value": stats.get("mcx_value"),
+        "crypto_usdt": stats.get("crypto_usdt"),
         "total_pnl": pnl,
         "total_brokerage": stats.get("total_brokerage", 0.0),
         "today_pnl": round(today_pnl, 2),

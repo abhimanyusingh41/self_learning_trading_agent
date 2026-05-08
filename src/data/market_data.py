@@ -7,7 +7,7 @@ from loguru import logger
 
 
 # Base names to match MCX futures contracts (e.g. GOLD -> GOLD24MAYFUT)
-MCX_BASE_NAMES = {"GOLD", "GOLDM", "GOLDPETAL", "SILVER", "SILVERM", "CRUDEOIL", "NATURALGAS"}
+MCX_BASE_NAMES = {"GOLD", "GOLDM", "GOLDPETAL", "SILVER", "SILVERM", "SILVERMIC", "CRUDEOIL", "NATURALGAS"}
 
 KITE_TIMEOUT = 15        # seconds — Kite can be slow during market hours
 KITE_RETRY_DELAY = 3     # seconds between retries

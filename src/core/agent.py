@@ -59,9 +59,17 @@ class TradingAgent:
         self._check_exit_conditions(now_ist)
 
         # Persist current capital so dashboard can display it
+        nse_val = self.executor.get_portfolio_value()
+        mcx_val = self.executor.mcx_paper.get_portfolio_value() if hasattr(self.executor, "mcx_paper") else 0.0
+        crypto_val = self.executor.binance_paper.get_portfolio_value() if hasattr(self.executor, "binance_paper") else 0.0
+        nse_cash = self.executor.cash
+        mcx_cash = self.executor.mcx_paper.cash if hasattr(self.executor, "mcx_paper") else 0.0
         self.memory.update_portfolio_state(
-            portfolio_value=self.executor.get_portfolio_value(),
-            cash=self.executor.cash,
+            portfolio_value=nse_val + mcx_val,
+            cash=nse_cash + mcx_cash,
+            nse_value=nse_val,
+            mcx_value=mcx_val,
+            crypto_usdt=crypto_val,
         )
 
         # Check daily loss limit
@@ -81,7 +89,9 @@ class TradingAgent:
 
         # Portfolio state
         portfolio_str = self._format_portfolio()
-        capital = self.executor.get_portfolio_value()
+        nse_capital = self.executor.get_portfolio_value()
+        mcx_capital = self.executor.mcx_paper.get_portfolio_value() if hasattr(self.executor, "mcx_paper") else 0.0
+        crypto_usdt = self.executor.binance_paper.get_portfolio_value() if hasattr(self.executor, "binance_paper") else 0.0
 
         # Past lessons
         lessons = self.memory.get_relevant_lessons(limit=10)
@@ -94,7 +104,12 @@ class TradingAgent:
 
         # Brain decides
         logger.info("Asking brain for trade decision...")
-        decision = self.brain.analyze_and_decide(full_context, lessons_text, portfolio_str, capital)
+        decision = self.brain.analyze_and_decide(
+            full_context, lessons_text, portfolio_str,
+            capital=nse_capital,
+            mcx_capital=mcx_capital,
+            crypto_usdt=crypto_usdt,
+        )
 
         logger.info(
             f"Decision: {decision.action} | Symbol: {decision.symbol} | "
@@ -160,7 +175,7 @@ class TradingAgent:
             elif hasattr(self.executor, "binance_live"):
                 crypto_capital = self.executor.binance_live.get_portfolio_value()
             else:
-                crypto_capital = capital * 0.2  # fallback: 20% of INR capital
+                crypto_capital = nse_capital * 0.2  # fallback: 20% of NSE capital
 
             crypto_positions = []
             if hasattr(self.executor, "binance_paper"):
@@ -199,8 +214,8 @@ class TradingAgent:
             risk_cfg = self.config.get("risk", {})
             max_loss_pct = risk_cfg.get("options_per_trade_loss_pct", 3.0)
             max_value_pct = risk_cfg.get("options_max_trade_value_pct", 15.0)
-            max_risk = capital * max_loss_pct / 100
-            max_value = capital * max_value_pct / 100
+            max_risk = nse_capital * max_loss_pct / 100
+            max_value = nse_capital * max_value_pct / 100
 
             # Try requested lots first; fall back to 1 lot before blocking
             approved_lots = None
@@ -230,14 +245,25 @@ class TradingAgent:
             decision.quantity = approved_lots
 
         else:
+            # Use MCX capital pool for MCX trades
+            is_mcx_trade = self._is_mcx_symbol(symbol)
+            if is_mcx_trade and hasattr(self.executor, "mcx_paper"):
+                trade_capital = self.executor.mcx_paper.get_portfolio_value()
+                trade_daily_pnl = self.executor.mcx_paper.get_daily_pnl()
+                trade_positions = self.executor.mcx_paper.get_open_positions()
+            else:
+                trade_capital = nse_capital
+                trade_daily_pnl = daily_pnl
+                trade_positions = open_positions
+
             risk_result = self.risk.check_trade(
                 action=decision.action,
                 entry_price=decision.entry_price or 0,
                 stop_loss=decision.stop_loss or 0,
                 quantity=decision.quantity or 0,
-                current_capital=capital,
-                daily_pnl=daily_pnl,
-                open_positions=open_positions,
+                current_capital=trade_capital,
+                daily_pnl=trade_daily_pnl,
+                open_positions=trade_positions,
             )
 
             if not risk_result.allowed:
@@ -252,22 +278,24 @@ class TradingAgent:
         self._execute_decision(decision)
 
     def _execute_decision(self, decision: TradeDecision):
-        # Crypto goes to binance_paper/binance_live if attached
         is_crypto = decision.symbol in self._crypto_symbols
         is_option = self._is_option_symbol(decision.symbol or "")
+        is_mcx = self._is_mcx_symbol(decision.symbol or "")
 
         if is_crypto and hasattr(self.executor, "binance_paper"):
             exec_target = self.executor.binance_paper
         elif is_crypto and hasattr(self.executor, "binance_live"):
             exec_target = self.executor.binance_live
+        elif is_mcx and hasattr(self.executor, "mcx_paper"):
+            exec_target = self.executor.mcx_paper
         else:
-            exec_target = self.executor
+            exec_target = self.executor  # NSE
 
         # Resolve lot size and compute actual units for option orders
         num_lots = decision.quantity
         actual_quantity = decision.quantity
         lot_size = 1
-        order_exchange = "NSE"
+        order_exchange = "MCX" if is_mcx else "NSE"
 
         if is_option:
             underlying = self._get_underlying_from_option(decision.symbol or "")
@@ -330,6 +358,8 @@ class TradingAgent:
             if options_only and not is_option:
                 continue
 
+            is_mcx = self._is_mcx_symbol(symbol)
+
             # Get price from right executor / data source
             if is_option:
                 # Options: fetch live premium via market data NFO feed
@@ -342,6 +372,8 @@ class TradingAgent:
                 current_price = self.executor.binance_paper.get_current_price(symbol)
             elif is_crypto and hasattr(self.executor, "binance_live"):
                 current_price = self.executor.binance_live.get_current_price(symbol)
+            elif is_mcx and hasattr(self.executor, "mcx_paper"):
+                current_price = self.executor.mcx_paper.get_current_price(symbol)
             else:
                 current_price = self.executor.get_current_price(symbol)
 
@@ -396,6 +428,8 @@ class TradingAgent:
                     exec_target = self.executor.binance_paper
                 elif is_crypto and hasattr(self.executor, "binance_live"):
                     exec_target = self.executor.binance_live
+                elif is_mcx and hasattr(self.executor, "mcx_paper"):
+                    exec_target = self.executor.mcx_paper
 
                 result = exec_target.close_position(
                     symbol=symbol,
@@ -417,9 +451,8 @@ class TradingAgent:
         daily_pnl = self.executor.get_daily_pnl()
 
         lines = [
-            f"Available Capital: ₹{capital:,.2f}",
-            f"Daily PnL: ₹{daily_pnl:,.2f}",
-            f"Open Positions (equity/options/commodity): {len(positions)}",
+            f"NSE Pool: ₹{capital:,.2f} | Daily PnL: ₹{daily_pnl:,.2f}",
+            f"NSE Open Positions: {len(positions)}",
         ]
         for pos in positions:
             symbol = pos.get("symbol", "")
@@ -444,6 +477,20 @@ class TradingAgent:
                 cur = self.executor.get_current_price(symbol)
                 lines.append(
                     f"  {symbol}: {pos.get('action')} {pos.get('quantity')} "
+                    f"@ ₹{pos.get('entry_price', 0):.2f} | CMP: ₹{cur:.2f} | SL: ₹{pos.get('stop_loss', 0):.2f}"
+                )
+
+        # MCX portfolio
+        if hasattr(self.executor, "mcx_paper"):
+            mp = self.executor.mcx_paper
+            lines.append(
+                f"\nMCX Pool: ₹{mp.get_portfolio_value():,.2f} | Cash: ₹{mp.cash:,.2f} | Daily PnL: ₹{mp.get_daily_pnl():,.2f}"
+            )
+            lines.append(f"MCX Open Positions: {len(mp.get_open_positions())}")
+            for pos in mp.get_open_positions():
+                cur = mp.get_current_price(pos.get("symbol", ""))
+                lines.append(
+                    f"  {pos.get('symbol')}: {pos.get('action')} {pos.get('quantity')} "
                     f"@ ₹{pos.get('entry_price', 0):.2f} | CMP: ₹{cur:.2f} | SL: ₹{pos.get('stop_loss', 0):.2f}"
                 )
 
@@ -557,6 +604,7 @@ class TradingAgent:
             symbol = trade["symbol"]
             is_crypto = symbol in self._crypto_symbols
             is_option = self._is_option_symbol(symbol)
+            is_mcx = self._is_mcx_symbol(symbol)
             entry_price = float(trade.get("entry_price", 0))
             quantity = trade.get("quantity", 0)
 
@@ -599,6 +647,24 @@ class TradingAgent:
                 logger.info(
                     f"Restored crypto position: {symbol} | {qty} @ {entry_price:.4f} | "
                     f"{cost:.4f} USDT deducted"
+                )
+
+            elif is_mcx and hasattr(self.executor, "mcx_paper"):
+                self.executor.mcx_paper.positions[symbol] = {
+                    "symbol": symbol,
+                    "action": trade.get("action", "BUY"),
+                    "quantity": int(quantity),
+                    "entry_price": entry_price,
+                    "stop_loss": float(trade.get("stop_loss", 0)),
+                    "target": float(trade.get("target_1", 0)),
+                    "order_id": trade.get("order_id", "restored"),
+                    "entry_time": trade.get("entry_time", ""),
+                }
+                cost = entry_price * int(quantity) + 20.0
+                self.executor.mcx_paper.cash = max(0.0, self.executor.mcx_paper.cash - cost)
+                logger.info(
+                    f"Restored MCX position: {symbol} | {quantity} @ ₹{entry_price:.2f} | "
+                    f"₹{cost:.0f} deducted from MCX cash"
                 )
 
             else:

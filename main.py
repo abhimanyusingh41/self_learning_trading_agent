@@ -105,16 +105,31 @@ def build_agent(config: dict, mode: str):
         if mode == "paper":
             from src.execution.paper_trader import PaperTrader
             from src.execution.binance_trader import BinancePaperTrader
-            initial_capital = config["risk"].get("initial_capital", 100000)
-            executor = PaperTrader(initial_capital=initial_capital)
+            risk_cfg = config.get("risk", {})
+            nse_capital = risk_cfg.get("nse_capital", 50000)
+            mcx_capital = risk_cfg.get("mcx_capital", 50000)
+            crypto_usdt = risk_cfg.get("crypto_capital_usdt", 500)
+
+            # NSE options executor (₹50K)
+            executor = PaperTrader(initial_capital=nse_capital)
             executor.set_price_feed(
-                lambda sym: market_data.get_quote([sym], config["instruments"].get("exchange", "NSE"))
-                .get(f"{config['instruments'].get('exchange', 'NSE')}:{sym}", {})
+                lambda sym: market_data.get_quote([sym], "NSE")
+                .get(f"NSE:{sym}", {})
                 .get("last_price", 0.0)
             )
-            # Attach Binance paper trader for crypto positions
-            executor.binance_paper = BinancePaperTrader(initial_usdt=initial_capital * 0.2)
-            logger.info(f"Paper trading mode | Capital: ₹{initial_capital:,} + 20% in crypto (USDT)")
+
+            # MCX commodities executor (₹50K) with MCX price feed
+            mcx_trader = PaperTrader(initial_capital=mcx_capital)
+            mcx_trader.set_price_feed(
+                lambda sym: market_data.get_mcx_quote([sym]).get(sym, {}).get("last_price", 0.0)
+            )
+            executor.mcx_paper = mcx_trader
+
+            # Binance paper trader for crypto ($500 USDT)
+            executor.binance_paper = BinancePaperTrader(initial_usdt=crypto_usdt)
+            logger.info(
+                f"Paper trading mode | NSE: ₹{nse_capital:,} | MCX: ₹{mcx_capital:,} | Crypto: ${crypto_usdt} USDT"
+            )
 
         else:  # live
             from src.execution.live_trader import LiveTrader

@@ -115,10 +115,23 @@ class TradeMemory:
             f"Best: ₹{s['best_trade_pnl']:,.2f} | Worst: ₹{s['worst_trade_pnl']:,.2f}"
         )
 
-    def update_portfolio_state(self, portfolio_value: float, cash: float):
+    def update_portfolio_state(
+        self,
+        portfolio_value: float,
+        cash: float,
+        nse_value: float = None,
+        mcx_value: float = None,
+        crypto_usdt: float = None,
+    ):
         """Called by agent after each cycle to persist current capital for the dashboard."""
         self._data["stats"]["portfolio_value"] = round(portfolio_value, 2)
         self._data["stats"]["cash"] = round(cash, 2)
+        if nse_value is not None:
+            self._data["stats"]["nse_value"] = round(nse_value, 2)
+        if mcx_value is not None:
+            self._data["stats"]["mcx_value"] = round(mcx_value, 2)
+        if crypto_usdt is not None:
+            self._data["stats"]["crypto_usdt"] = round(crypto_usdt, 2)
         self._save()
 
     def update_trade_cmp(self, trade_id: str, price: float):
