@@ -1,5 +1,6 @@
 from datetime import datetime, date
 from typing import Optional
+import time
 import pandas as pd
 from kiteconnect import KiteConnect
 from loguru import logger
@@ -8,20 +9,45 @@ from loguru import logger
 # Base names to match MCX futures contracts (e.g. GOLD -> GOLD24MAYFUT)
 MCX_BASE_NAMES = {"GOLD", "GOLDM", "GOLDPETAL", "SILVER", "SILVERM", "CRUDEOIL", "NATURALGAS"}
 
+KITE_TIMEOUT = 15        # seconds — Kite can be slow during market hours
+KITE_RETRY_DELAY = 3     # seconds between retries
+KITE_MAX_RETRIES = 2
+
 
 class MarketData:
     def __init__(self, api_key: str, access_token: str):
-        self.kite = KiteConnect(api_key=api_key)
+        self.kite = KiteConnect(api_key=api_key, timeout=KITE_TIMEOUT)
         self.kite.set_access_token(access_token)
         self._mcx_contract_cache: dict[str, str] = {}  # base -> active contract symbol
+        self._price_cache: dict[str, float] = {}       # last known prices for fallback
+
+    def _kite_quote(self, instruments: list[str]) -> dict:
+        """Call kite.quote() with retry on timeout. Returns cached values on persistent failure."""
+        for attempt in range(1, KITE_MAX_RETRIES + 1):
+            try:
+                data = self.kite.quote(instruments)
+                # Update price cache on success
+                for key, q in data.items():
+                    if q.get("last_price"):
+                        self._price_cache[key] = q["last_price"]
+                return data
+            except Exception as e:
+                if attempt < KITE_MAX_RETRIES:
+                    logger.warning(f"Kite API timeout (attempt {attempt}/{KITE_MAX_RETRIES}), retrying in {KITE_RETRY_DELAY}s: {e}")
+                    time.sleep(KITE_RETRY_DELAY)
+                else:
+                    logger.error(f"Kite API failed after {KITE_MAX_RETRIES} attempts: {e}")
+        # Return synthetic quotes from cache for instruments we've seen before
+        fallback = {}
+        for inst in instruments:
+            if inst in self._price_cache:
+                fallback[inst] = {"last_price": self._price_cache[inst], "net_change": 0, "change": 0, "volume": 0}
+                logger.warning(f"Using cached price for {inst}: {self._price_cache[inst]}")
+        return fallback
 
     def get_quote(self, symbols: list[str], exchange: str = "NSE") -> dict:
         instruments = [f"{exchange}:{s}" for s in symbols]
-        try:
-            return self.kite.quote(instruments)
-        except Exception as e:
-            logger.error(f"Failed to get quotes for {symbols}: {e}")
-            return {}
+        return self._kite_quote(instruments)
 
     def get_historical_data(
         self,
@@ -58,7 +84,7 @@ class MarketData:
         """Get open interest data for F&O instruments."""
         try:
             instrument = f"{exchange}:{symbol}"
-            quote = self.kite.quote([instrument])
+            quote = self._kite_quote([instrument])
             data = quote.get(instrument, {})
             return {
                 "oi": data.get("oi", 0),
@@ -71,34 +97,21 @@ class MarketData:
             return {}
 
     def get_nifty_quote(self) -> dict:
-        try:
-            data = self.kite.quote(["NSE:NIFTY 50"])
-            return data.get("NSE:NIFTY 50", {})
-        except Exception as e:
-            logger.error(f"Failed to get NIFTY quote: {e}")
-            return {}
+        data = self._kite_quote(["NSE:NIFTY 50"])
+        return data.get("NSE:NIFTY 50", {})
 
     def get_banknifty_quote(self) -> dict:
-        try:
-            data = self.kite.quote(["NSE:NIFTY BANK"])
-            return data.get("NSE:NIFTY BANK", {})
-        except Exception as e:
-            logger.error(f"Failed to get BANKNIFTY quote: {e}")
-            return {}
+        data = self._kite_quote(["NSE:NIFTY BANK"])
+        return data.get("NSE:NIFTY BANK", {})
 
     def get_indices_data(self) -> dict:
         """Fetch NIFTY50, BANKNIFTY, and India VIX in one call."""
-        try:
-            instruments = ["NSE:NIFTY 50", "NSE:NIFTY BANK", "NSE:INDIA VIX"]
-            data = self.kite.quote(instruments)
-            return {
-                "nifty": data.get("NSE:NIFTY 50", {}),
-                "banknifty": data.get("NSE:NIFTY BANK", {}),
-                "india_vix": data.get("NSE:INDIA VIX", {}),
-            }
-        except Exception as e:
-            logger.error(f"Failed to get indices data: {e}")
-            return {}
+        data = self._kite_quote(["NSE:NIFTY 50", "NSE:NIFTY BANK", "NSE:INDIA VIX"])
+        return {
+            "nifty": data.get("NSE:NIFTY 50", {}),
+            "banknifty": data.get("NSE:NIFTY BANK", {}),
+            "india_vix": data.get("NSE:INDIA VIX", {}),
+        }
 
     def get_positions(self) -> dict:
         try:
@@ -149,7 +162,7 @@ class MarketData:
             if not active:
                 continue
             try:
-                data = self.kite.quote([f"MCX:{active}"])
+                data = self._kite_quote([f"MCX:{active}"])
                 q = data.get(f"MCX:{active}", {})
                 if q:
                     q["active_contract"] = active

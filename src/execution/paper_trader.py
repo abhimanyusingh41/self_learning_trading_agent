@@ -25,9 +25,13 @@ class PaperTrader(BaseExecutor):
     def get_current_price(self, symbol: str, exchange: str = "NSE") -> float:
         if hasattr(self, "_price_fn"):
             try:
-                return self._price_fn(symbol)
+                price = self._price_fn(symbol)
+                if price:
+                    self._price_cache[symbol] = price  # keep cache fresh
+                    return price
             except Exception:
                 pass
+        # Fall back to last known price — better than 0 for SL/target checks
         return self._price_cache.get(symbol, 0.0)
 
     def update_price(self, symbol: str, price: float):
