@@ -52,6 +52,9 @@ class TradingAgent:
         if not equity_open and not commodity_open:
             logger.info("NSE and MCX closed — crypto-only cycle")
 
+        # Refresh crypto price cache so SL/target checks have live prices
+        self._refresh_crypto_prices()
+
         # Always check exit conditions (SL/target hits, EOD close)
         self._check_exit_conditions(now_ist)
 
@@ -278,12 +281,18 @@ class TradingAgent:
         # Crypto portfolio
         if hasattr(self.executor, "binance_paper"):
             bp = self.executor.binance_paper
-            lines.append(f"\nCrypto Portfolio (USDT): {bp.get_portfolio_value():.2f}")
+            lines.append(
+                f"\nCrypto Portfolio: {bp.get_portfolio_value():.2f} USDT "
+                f"(Balance: {bp.usdt_balance:.2f} | Daily PnL: {bp.get_daily_pnl():.4f} USDT)"
+            )
+            lines.append(f"Crypto Positions: {len(bp.get_open_positions())}")
             for pos in bp.get_open_positions():
                 cur = bp.get_current_price(pos.get("symbol", ""))
+                unreal = (cur - pos.get("entry_price", 0)) * pos.get("quantity", 0) if cur else 0
                 lines.append(
                     f"  {pos.get('symbol')}: {pos.get('action')} {pos.get('quantity')} "
-                    f"@ {pos.get('entry_price', 0):.4f} | CMP: {cur:.4f}"
+                    f"@ {pos.get('entry_price', 0):.4f} | CMP: {cur:.4f} | "
+                    f"Unreal: {unreal:.4f} USDT | SL: {pos.get('stop_loss', 0):.4f}"
                 )
         return "\n".join(lines)
 
@@ -315,6 +324,18 @@ class TradingAgent:
         o = now_ist.replace(hour=int(open_t[0]), minute=int(open_t[1]), second=0, microsecond=0)
         c = now_ist.replace(hour=int(close_t[0]), minute=int(close_t[1]), second=0, microsecond=0)
         return o <= now_ist <= c
+
+    def _refresh_crypto_prices(self):
+        """Push latest Binance prices into BinancePaperTrader cache for SL/target checks."""
+        if not (self.analyzer.bd and hasattr(self.executor, "binance_paper")):
+            return
+        try:
+            quotes = self.analyzer.bd.get_quote(list(self._crypto_symbols))
+            prices = {sym: q.get("last_price", 0) for sym, q in quotes.items() if q.get("last_price")}
+            if prices:
+                self.executor.binance_paper.update_prices(prices)
+        except Exception as e:
+            logger.debug(f"Crypto price refresh failed: {e}")
 
     def _is_mcx_symbol(self, symbol: str) -> bool:
         mcx_symbols = set(self.config.get("instruments", {}).get("commodities", []))

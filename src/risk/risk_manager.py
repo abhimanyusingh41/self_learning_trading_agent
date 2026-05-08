@@ -6,7 +6,7 @@ from loguru import logger
 class RiskCheckResult:
     allowed: bool
     reason: str
-    max_quantity: int = 0
+    max_quantity: float = 0.0
     adjusted_size: float = 0.0
 
 
@@ -68,7 +68,7 @@ class RiskManager:
             max_qty = self.calculate_position_size(current_capital, entry_price, stop_loss)
             return RiskCheckResult(
                 False,
-                f"Trade risk ₹{trade_risk:.0f} exceeds limit ₹{max_allowed_risk:.0f}. Max qty: {max_qty}",
+                f"Trade risk {trade_risk:.4f} exceeds limit {max_allowed_risk:.4f}. Max qty: {max_qty:.6f}",
                 max_quantity=max_qty,
             )
 
@@ -76,14 +76,14 @@ class RiskManager:
         trade_value = entry_price * quantity
         max_trade_value = current_capital * self._max_trade_value_pct / 100
         if trade_value > max_trade_value:
-            max_qty_by_value = int(max_trade_value / entry_price)
+            max_qty_by_value = max_trade_value / entry_price
             return RiskCheckResult(
                 False,
-                f"Trade value ₹{trade_value:.0f} exceeds {self._max_trade_value_pct}% of capital. Max qty: {max_qty_by_value}",
+                f"Trade value {trade_value:.2f} exceeds {self._max_trade_value_pct}% of capital. Max qty: {max_qty_by_value:.6f}",
                 max_quantity=max_qty_by_value,
             )
 
-        return RiskCheckResult(True, "Risk checks passed.", max_quantity=quantity)
+        return RiskCheckResult(True, "Risk checks passed.", max_quantity=float(quantity))
 
     def calculate_position_size(
         self,
@@ -91,16 +91,18 @@ class RiskManager:
         entry_price: float,
         stop_loss: float,
         risk_pct: float = None,
-    ) -> int:
+    ) -> float:
         pct = risk_pct if risk_pct is not None else self._per_trade_loss_pct
         max_risk_amount = capital * pct / 100
         risk_per_share = abs(entry_price - stop_loss)
         if risk_per_share <= 0:
-            return 0
+            return 0.0
         raw_qty = max_risk_amount / risk_per_share
         # Also cap by max_trade_value_pct
         max_qty_by_value = (capital * self._max_trade_value_pct / 100) / entry_price
-        return max(0, int(min(raw_qty, max_qty_by_value)))
+        qty = min(raw_qty, max_qty_by_value)
+        # Round to int for equity, preserve precision for crypto (fractional)
+        return round(qty, 8) if qty < 1 else max(0.0, float(int(qty)))
 
     def is_trading_allowed(self, daily_pnl: float) -> tuple[bool, str]:
         if self._kill_switch:
