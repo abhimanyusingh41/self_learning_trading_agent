@@ -58,6 +58,12 @@ class TradingAgent:
         # Always check exit conditions (SL/target hits, EOD close)
         self._check_exit_conditions(now_ist)
 
+        # Persist current capital so dashboard can display it
+        self.memory.update_portfolio_state(
+            portfolio_value=self.executor.get_portfolio_value(),
+            cash=self.executor.cash,
+        )
+
         # Check daily loss limit
         daily_pnl = self.executor.get_daily_pnl()
         trading_ok, reason = self.risk.is_trading_allowed(daily_pnl)

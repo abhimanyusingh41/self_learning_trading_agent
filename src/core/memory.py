@@ -115,6 +115,12 @@ class TradeMemory:
             f"Best: ₹{s['best_trade_pnl']:,.2f} | Worst: ₹{s['worst_trade_pnl']:,.2f}"
         )
 
+    def update_portfolio_state(self, portfolio_value: float, cash: float):
+        """Called by agent after each cycle to persist current capital for the dashboard."""
+        self._data["stats"]["portfolio_value"] = round(portfolio_value, 2)
+        self._data["stats"]["cash"] = round(cash, 2)
+        self._save()
+
     def update_trade_cmp(self, trade_id: str, price: float):
         """Record the last checked market price on an open trade."""
         for trade in self._data["trades"]:

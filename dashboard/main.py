@@ -69,6 +69,8 @@ async def summary(_=Depends(require_auth)):
     today_brokerage = sum(t.get("brokerage", 0) for t in today_trades)
 
     return {
+        "portfolio_value": stats.get("portfolio_value"),
+        "cash": stats.get("cash"),
         "total_pnl": pnl,
         "total_brokerage": stats.get("total_brokerage", 0.0),
         "today_pnl": round(today_pnl, 2),
