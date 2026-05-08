@@ -99,9 +99,13 @@ class TradingAgent:
             logger.info(f"Brain says wait: {decision.rationale[:200]}")
             return
 
-        # Validate: don't trade NSE stocks when market is closed
+        # Validate: don't trade NSE options/equities when market is closed
         symbol = decision.symbol or ""
-        if not equity_open and symbol and symbol not in self._crypto_symbols and not self._is_mcx_symbol(symbol):
+        is_equity_instrument = (
+            symbol not in self._crypto_symbols
+            and not self._is_mcx_symbol(symbol)
+        )
+        if not equity_open and symbol and is_equity_instrument:
             logger.warning(f"Brain picked {symbol} but NSE is closed — skipping")
             return
 
@@ -124,8 +128,9 @@ class TradingAgent:
                 logger.warning(f"Already have open crypto position in {symbol} — skipping duplicate entry")
                 return
 
-        # Risk check — use USDT balance for crypto, INR capital for equities
+        # Risk check — options, crypto, and equity each have their own limits
         is_crypto_trade = symbol in self._crypto_symbols
+        is_option_trade = self._is_option_symbol(symbol)
 
         if is_crypto_trade:
             # For crypto use USDT balance and skip INR-based risk limits
@@ -149,6 +154,60 @@ class TradingAgent:
                 daily_pnl=0,
                 open_positions=crypto_positions,
             )
+
+            if not risk_result.allowed:
+                logger.warning(f"Risk check BLOCKED crypto trade: {risk_result.reason}")
+                if risk_result.max_quantity > 0:
+                    logger.info(f"Adjusted quantity: {risk_result.max_quantity}")
+                    decision.quantity = risk_result.max_quantity
+                else:
+                    return
+
+        elif is_option_trade and decision.action in ("BUY", "SHORT"):
+            # Options risk check: brain returns num_lots (1-2); validate using actual units
+            if len(open_positions) >= self.risk._max_positions:
+                logger.warning(f"Risk check BLOCKED option trade: max positions ({self.risk._max_positions}) reached")
+                return
+
+            underlying = self._get_underlying_from_option(symbol)
+            lot_size = self._get_lot_size(underlying)
+            num_lots = int(decision.quantity or 1)
+            entry = decision.entry_price or 0
+            sl = decision.stop_loss or 0
+
+            risk_cfg = self.config.get("risk", {})
+            max_loss_pct = risk_cfg.get("options_per_trade_loss_pct", 3.0)
+            max_value_pct = risk_cfg.get("options_max_trade_value_pct", 15.0)
+            max_risk = capital * max_loss_pct / 100
+            max_value = capital * max_value_pct / 100
+
+            # Try requested lots first; fall back to 1 lot before blocking
+            approved_lots = None
+            for try_lots in ([num_lots] + ([1] if num_lots > 1 else [])):
+                units = try_lots * lot_size
+                trade_value = entry * units
+                trade_risk = abs(entry - sl) * units
+                if trade_value <= max_value and trade_risk <= max_risk:
+                    if try_lots != num_lots:
+                        logger.info(
+                            f"Option size reduced {num_lots}→{try_lots} lot(s) "
+                            f"(value ₹{trade_value:.0f} ≤ ₹{max_value:.0f}, risk ₹{trade_risk:.0f} ≤ ₹{max_risk:.0f})"
+                        )
+                    approved_lots = try_lots
+                    break
+
+            if approved_lots is None:
+                one_unit_value = entry * lot_size
+                one_unit_risk = abs(entry - sl) * lot_size
+                logger.warning(
+                    f"Risk check BLOCKED option trade {symbol}: "
+                    f"1 lot value ₹{one_unit_value:.0f} (limit ₹{max_value:.0f}) | "
+                    f"risk ₹{one_unit_risk:.0f} (limit ₹{max_risk:.0f})"
+                )
+                return
+
+            decision.quantity = approved_lots
+
         else:
             risk_result = self.risk.check_trade(
                 action=decision.action,
@@ -160,13 +219,13 @@ class TradingAgent:
                 open_positions=open_positions,
             )
 
-        if not risk_result.allowed:
-            logger.warning(f"Risk check BLOCKED trade: {risk_result.reason}")
-            if risk_result.max_quantity > 0:
-                logger.info(f"Adjusted quantity: {risk_result.max_quantity}")
-                decision.quantity = risk_result.max_quantity
-            else:
-                return
+            if not risk_result.allowed:
+                logger.warning(f"Risk check BLOCKED trade: {risk_result.reason}")
+                if risk_result.max_quantity > 0:
+                    logger.info(f"Adjusted quantity: {risk_result.max_quantity}")
+                    decision.quantity = risk_result.max_quantity
+                else:
+                    return
 
         # Route to correct executor
         self._execute_decision(decision)
@@ -174,6 +233,8 @@ class TradingAgent:
     def _execute_decision(self, decision: TradeDecision):
         # Crypto goes to binance_paper/binance_live if attached
         is_crypto = decision.symbol in self._crypto_symbols
+        is_option = self._is_option_symbol(decision.symbol or "")
+
         if is_crypto and hasattr(self.executor, "binance_paper"):
             exec_target = self.executor.binance_paper
         elif is_crypto and hasattr(self.executor, "binance_live"):
@@ -181,20 +242,43 @@ class TradingAgent:
         else:
             exec_target = self.executor
 
+        # Resolve lot size and compute actual units for option orders
+        num_lots = decision.quantity
+        actual_quantity = decision.quantity
+        lot_size = 1
+        order_exchange = "NSE"
+
+        if is_option:
+            underlying = self._get_underlying_from_option(decision.symbol or "")
+            lot_size = self._get_lot_size(underlying)
+            actual_quantity = int((decision.quantity or 1) * lot_size)
+            order_exchange = "NFO"
+            logger.info(
+                f"Option order: {decision.symbol} | {num_lots} lot(s) x {lot_size} = {actual_quantity} units | exchange=NFO"
+            )
+
         result = exec_target.place_order(
             symbol=decision.symbol,
             action=decision.action,
-            quantity=decision.quantity,
+            quantity=actual_quantity,
             price=decision.entry_price,
             stop_loss=decision.stop_loss,
             target=decision.target_1,
+            exchange=order_exchange,
         )
 
         if result.success:
+            extra = {}
+            if is_option:
+                extra = {
+                    "asset_class": "option",
+                    "lot_size": lot_size,
+                    "num_lots": int(num_lots or 1),
+                }
             trade_id = self.memory.record_trade_entry({
                 "symbol": decision.symbol,
                 "action": decision.action,
-                "quantity": decision.quantity,
+                "quantity": actual_quantity,
                 "entry_price": result.price,
                 "stop_loss": decision.stop_loss,
                 "target_1": decision.target_1,
@@ -204,9 +288,10 @@ class TradingAgent:
                 "key_risks": decision.key_risks,
                 "setup_type": decision.setup_type,
                 "time_horizon": decision.time_horizon,
-                "asset_class": "crypto" if is_crypto else "equity",
+                "asset_class": "option" if is_option else ("crypto" if is_crypto else "equity"),
                 "market_context_snapshot": self._last_market_context[:2000],
                 "order_id": result.order_id,
+                **extra,
             })
             logger.info(f"Trade recorded: {trade_id} — {decision.action} {decision.symbol}")
         else:
@@ -219,9 +304,17 @@ class TradingAgent:
         for trade in open_trades:
             symbol = trade["symbol"]
             is_crypto = symbol in self._crypto_symbols
+            is_option = self._is_option_symbol(symbol)
 
-            # Get price from right executor
-            if is_crypto and hasattr(self.executor, "binance_paper"):
+            # Get price from right executor / data source
+            if is_option:
+                # Options: fetch live premium via market data NFO feed
+                try:
+                    current_price = self.analyzer.md.get_option_quote(symbol)
+                except Exception as e:
+                    logger.debug(f"Option quote error for {symbol}: {e}")
+                    current_price = 0.0
+            elif is_crypto and hasattr(self.executor, "binance_paper"):
                 current_price = self.executor.binance_paper.get_current_price(symbol)
             elif is_crypto and hasattr(self.executor, "binance_live"):
                 current_price = self.executor.binance_live.get_current_price(symbol)
@@ -282,14 +375,33 @@ class TradingAgent:
         lines = [
             f"Available Capital: ₹{capital:,.2f}",
             f"Daily PnL: ₹{daily_pnl:,.2f}",
-            f"Open Positions (equity/commodity): {len(positions)}",
+            f"Open Positions (equity/options/commodity): {len(positions)}",
         ]
         for pos in positions:
-            cur = self.executor.get_current_price(pos.get("symbol", ""))
-            lines.append(
-                f"  {pos.get('symbol')}: {pos.get('action')} {pos.get('quantity')} "
-                f"@ ₹{pos.get('entry_price', 0):.2f} | CMP: ₹{cur:.2f} | SL: ₹{pos.get('stop_loss', 0):.2f}"
-            )
+            symbol = pos.get("symbol", "")
+            is_option = self._is_option_symbol(symbol)
+            if is_option:
+                # Get live premium for options
+                try:
+                    cur = self.analyzer.md.get_option_quote(symbol)
+                except Exception:
+                    cur = 0.0
+                underlying = self._get_underlying_from_option(symbol)
+                lot_size = self._get_lot_size(underlying)
+                qty = pos.get("quantity", 0)
+                num_lots = qty // lot_size if lot_size else qty
+                lines.append(
+                    f"  {symbol} [OPTION/{underlying}]: {pos.get('action')} "
+                    f"{num_lots} lot(s) ({qty} units) "
+                    f"@ ₹{pos.get('entry_price', 0):.2f} premium | CMP: ₹{cur:.2f} | "
+                    f"SL: ₹{pos.get('stop_loss', 0):.2f}"
+                )
+            else:
+                cur = self.executor.get_current_price(symbol)
+                lines.append(
+                    f"  {symbol}: {pos.get('action')} {pos.get('quantity')} "
+                    f"@ ₹{pos.get('entry_price', 0):.2f} | CMP: ₹{cur:.2f} | SL: ₹{pos.get('stop_loss', 0):.2f}"
+                )
 
         # Crypto portfolio
         if hasattr(self.executor, "binance_paper"):
@@ -311,7 +423,7 @@ class TradingAgent:
 
     def _session_note(self, equity_open: bool, commodity_open: bool) -> str:
         lines = ["=== TRADING SESSION STATUS ==="]
-        lines.append(f"NSE Equities: {'OPEN ✓' if equity_open else 'CLOSED — do NOT pick NSE stocks'}")
+        lines.append(f"NSE Stock Options (NFO): {'OPEN ✓' if equity_open else 'CLOSED — do NOT pick NSE options'}")
         lines.append(f"MCX Commodities: {'OPEN ✓' if commodity_open else 'CLOSED — do NOT pick MCX symbols'}")
         lines.append("Crypto (Binance): OPEN 24x7 ✓ — BTC/ETH/BNB/SOL/XRP available")
         if not equity_open and not commodity_open:
@@ -349,6 +461,38 @@ class TradingAgent:
                 self.executor.binance_paper.update_prices(prices)
         except Exception as e:
             logger.debug(f"Crypto price refresh failed: {e}")
+
+    def _is_option_symbol(self, symbol: str) -> bool:
+        """Return True if symbol is an options tradingsymbol (ends with CE or PE)."""
+        if not symbol:
+            return False
+        return symbol.endswith("CE") or symbol.endswith("PE")
+
+    def _get_lot_size(self, underlying_symbol: str) -> int:
+        """Look up lot_size for an underlying from config's option_underlyings list."""
+        underlyings = self.config.get("instruments", {}).get("option_underlyings", [])
+        for entry in underlyings:
+            if entry.get("symbol") == underlying_symbol:
+                return entry.get("lot_size", 1)
+        return 1
+
+    def _get_underlying_from_option(self, option_symbol: str) -> str:
+        """
+        Extract underlying name from an option tradingsymbol.
+        e.g. 'HDFCBANK26MAY785PE' -> 'HDFCBANK'
+        Uses configured underlying names as prefix candidates.
+        """
+        underlyings = self.config.get("instruments", {}).get("option_underlyings", [])
+        # Sort by length descending so longer names match first (e.g. BHARTIARTL before BHARTI)
+        sorted_underlyings = sorted(
+            [e.get("symbol", "") for e in underlyings],
+            key=len,
+            reverse=True,
+        )
+        for sym in sorted_underlyings:
+            if sym and option_symbol.startswith(sym):
+                return sym
+        return option_symbol  # fallback: return the full symbol
 
     def _is_mcx_symbol(self, symbol: str) -> bool:
         mcx_symbols = set(self.config.get("instruments", {}).get("commodities", []))

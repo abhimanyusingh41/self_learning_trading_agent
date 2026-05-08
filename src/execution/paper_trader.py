@@ -122,11 +122,23 @@ class PaperTrader(BaseExecutor):
         gross_pnl, net_pnl = self._close_position_internal(symbol, exec_price, reason)
         order_id = str(uuid.uuid4())[:10]
 
-        logger.info(
-            f"[PAPER] {exit_action} {pos['quantity']} {symbol} @ ₹{exec_price:.2f} | "
-            f"Gross PnL: ₹{gross_pnl:.2f} | Brokerage: ₹{BROKERAGE_PER_TRADE:.0f} | "
-            f"Net PnL: ₹{net_pnl:.2f} | {reason}"
-        )
+        is_option_pos = symbol.endswith("CE") or symbol.endswith("PE")
+        if is_option_pos:
+            entry_price = pos.get("entry_price", 0)
+            premium_chg = exec_price - entry_price
+            pct_chg = (premium_chg / entry_price * 100) if entry_price else 0
+            logger.info(
+                f"[PAPER] {exit_action} {pos['quantity']} {symbol} @ ₹{exec_price:.2f} premium "
+                f"(entry ₹{entry_price:.2f}, chg {'+' if premium_chg >= 0 else ''}₹{premium_chg:.2f} / {pct_chg:.1f}%) | "
+                f"Gross PnL: ₹{gross_pnl:.2f} | Brokerage: ₹{BROKERAGE_PER_TRADE:.0f} | "
+                f"Net PnL: ₹{net_pnl:.2f} | {reason}"
+            )
+        else:
+            logger.info(
+                f"[PAPER] {exit_action} {pos['quantity']} {symbol} @ ₹{exec_price:.2f} | "
+                f"Gross PnL: ₹{gross_pnl:.2f} | Brokerage: ₹{BROKERAGE_PER_TRADE:.0f} | "
+                f"Net PnL: ₹{net_pnl:.2f} | {reason}"
+            )
         return OrderResult(True, order_id, symbol, exit_action, pos["quantity"], exec_price, f"Closed: {reason}")
 
     def _close_position_internal(self, symbol: str, exit_price: float, reason: str) -> tuple[float, float]:

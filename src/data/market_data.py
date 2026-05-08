@@ -13,6 +13,10 @@ KITE_TIMEOUT = 15        # seconds — Kite can be slow during market hours
 KITE_RETRY_DELAY = 3     # seconds between retries
 KITE_MAX_RETRIES = 2
 
+# Module-level NFO instruments cache — persists across MarketData instances, refreshed daily
+_NFO_INSTRUMENTS_CACHE: list = []
+_NFO_INSTRUMENTS_DATE: Optional[date] = None
+
 
 class MarketData:
     def __init__(self, api_key: str, access_token: str):
@@ -170,6 +174,182 @@ class MarketData:
             except Exception as e:
                 logger.error(f"Failed to get MCX quote for {base} ({active}): {e}")
         return result
+
+    def _get_nfo_instruments(self) -> list:
+        """Return NFO instruments list, refreshing the module-level cache once per day."""
+        global _NFO_INSTRUMENTS_CACHE, _NFO_INSTRUMENTS_DATE
+        today = date.today()
+        if _NFO_INSTRUMENTS_DATE == today and _NFO_INSTRUMENTS_CACHE:
+            return _NFO_INSTRUMENTS_CACHE
+        try:
+            instruments = self.kite.instruments("NFO")
+            _NFO_INSTRUMENTS_CACHE = instruments
+            _NFO_INSTRUMENTS_DATE = today
+            logger.info(f"NFO instruments cache refreshed: {len(instruments)} instruments")
+        except Exception as e:
+            logger.error(f"Failed to fetch NFO instruments: {e}")
+        return _NFO_INSTRUMENTS_CACHE
+
+    def get_option_chain_snapshot(self, symbol: str, num_strikes: int = 3, lot_size: int = 1) -> dict:
+        """
+        Fetch a structured option chain snapshot for a single underlying.
+
+        Returns a dict with:
+          symbol, underlying_price, expiry, dte, lot_size,
+          atm_strike, atm_call_premium, atm_put_premium,
+          atm_call_oi, atm_put_oi, atm_iv, pcr,
+          chain: {tradingsymbol: {strike, type, premium, oi, volume, iv}}
+        """
+        today = date.today()
+
+        # --- Step 1: Get underlying price from NSE ---
+        try:
+            nse_data = self._kite_quote([f"NSE:{symbol}"])
+            underlying_q = nse_data.get(f"NSE:{symbol}", {})
+            underlying_price = underlying_q.get("last_price", 0)
+            underlying_pct = underlying_q.get("change", 0)
+        except Exception as e:
+            logger.error(f"Failed to get underlying price for {symbol}: {e}")
+            return {"symbol": symbol, "error": "underlying_price_unavailable"}
+
+        if not underlying_price:
+            return {"symbol": symbol, "error": "underlying_price_zero"}
+
+        # --- Step 2: Filter NFO instruments for this underlying, CE/PE only ---
+        try:
+            all_nfo = self._get_nfo_instruments()
+            # Filter to options (CE/PE) for this underlying, nearest expiry >= today
+            candidates = [
+                i for i in all_nfo
+                if i.get("name") == symbol
+                and i.get("instrument_type") in ("CE", "PE")
+                and i.get("expiry") is not None
+                and i.get("expiry") >= today
+            ]
+            if not candidates:
+                logger.warning(f"No NFO options found for {symbol}")
+                return {
+                    "symbol": symbol,
+                    "underlying_price": underlying_price,
+                    "underlying_pct": underlying_pct,
+                    "error": "option_data_unavailable",
+                }
+
+            # Find nearest expiry
+            nearest_expiry = min(i["expiry"] for i in candidates)
+            dte = (nearest_expiry - today).days
+
+            # Filter to nearest expiry only
+            expiry_instruments = [i for i in candidates if i["expiry"] == nearest_expiry]
+
+        except Exception as e:
+            logger.error(f"Failed to filter NFO instruments for {symbol}: {e}")
+            return {
+                "symbol": symbol,
+                "underlying_price": underlying_price,
+                "underlying_pct": underlying_pct,
+                "error": "option_data_unavailable",
+            }
+
+        # --- Step 3: Find ATM strike ---
+        strikes = sorted(set(i["strike"] for i in expiry_instruments))
+        if not strikes:
+            return {
+                "symbol": symbol,
+                "underlying_price": underlying_price,
+                "underlying_pct": underlying_pct,
+                "error": "no_strikes_found",
+            }
+        atm_strike = min(strikes, key=lambda s: abs(s - underlying_price))
+
+        # --- Step 4: Select ATM ± num_strikes strikes ---
+        atm_idx = strikes.index(atm_strike)
+        lo = max(0, atm_idx - num_strikes)
+        hi = min(len(strikes) - 1, atm_idx + num_strikes)
+        selected_strikes = strikes[lo: hi + 1]
+
+        # Build list of tradingsymbols for selected strikes (both CE and PE)
+        selected_instruments = [
+            i for i in expiry_instruments
+            if i["strike"] in selected_strikes
+        ]
+
+        # --- Step 5: Batch-fetch quotes (groups of 200) ---
+        tradingsymbols = [f"NFO:{i['tradingsymbol']}" for i in selected_instruments]
+        quotes: dict = {}
+        batch_size = 200
+        for batch_start in range(0, len(tradingsymbols), batch_size):
+            batch = tradingsymbols[batch_start: batch_start + batch_size]
+            try:
+                batch_quotes = self._kite_quote(batch)
+                quotes.update(batch_quotes)
+            except Exception as e:
+                logger.error(f"Failed to fetch option quotes batch for {symbol}: {e}")
+
+        # --- Step 6: Build chain dict ---
+        chain: dict = {}
+        for inst in selected_instruments:
+            ts = inst["tradingsymbol"]
+            key = f"NFO:{ts}"
+            q = quotes.get(key, {})
+            chain[ts] = {
+                "strike": inst["strike"],
+                "type": inst["instrument_type"],  # CE or PE
+                "premium": q.get("last_price", 0),
+                "oi": q.get("oi", 0),
+                "volume": q.get("volume", 0),
+                "iv": q.get("implied_volatility", 0),
+            }
+
+        # --- Step 7: Extract ATM call/put details ---
+        atm_ce_ts = next(
+            (i["tradingsymbol"] for i in selected_instruments
+             if i["strike"] == atm_strike and i["instrument_type"] == "CE"),
+            None,
+        )
+        atm_pe_ts = next(
+            (i["tradingsymbol"] for i in selected_instruments
+             if i["strike"] == atm_strike and i["instrument_type"] == "PE"),
+            None,
+        )
+
+        atm_call_premium = chain.get(atm_ce_ts, {}).get("premium", 0) if atm_ce_ts else 0
+        atm_put_premium = chain.get(atm_pe_ts, {}).get("premium", 0) if atm_pe_ts else 0
+        atm_call_oi = chain.get(atm_ce_ts, {}).get("oi", 0) if atm_ce_ts else 0
+        atm_put_oi = chain.get(atm_pe_ts, {}).get("oi", 0) if atm_pe_ts else 0
+        atm_iv = chain.get(atm_ce_ts, {}).get("iv", 0) if atm_ce_ts else 0
+
+        # PCR = total PE OI / total CE OI for selected strikes
+        total_ce_oi = sum(v["oi"] for v in chain.values() if v["type"] == "CE") or 1
+        total_pe_oi = sum(v["oi"] for v in chain.values() if v["type"] == "PE")
+        pcr = round(total_pe_oi / total_ce_oi, 2)
+
+        return {
+            "symbol": symbol,
+            "underlying_price": underlying_price,
+            "underlying_pct": underlying_pct,
+            "expiry": nearest_expiry.isoformat(),
+            "dte": dte,
+            "lot_size": lot_size,
+            "atm_strike": atm_strike,
+            "atm_call_premium": atm_call_premium,
+            "atm_put_premium": atm_put_premium,
+            "atm_call_oi": atm_call_oi,
+            "atm_put_oi": atm_put_oi,
+            "atm_iv": atm_iv,
+            "pcr": pcr,
+            "chain": chain,
+        }
+
+    def get_option_quote(self, tradingsymbol: str) -> float:
+        """Fetch live premium for a single option tradingsymbol (e.g. 'HDFCBANK26MAY785PE')."""
+        try:
+            key = f"NFO:{tradingsymbol}"
+            data = self._kite_quote([key])
+            return data.get(key, {}).get("last_price", 0.0)
+        except Exception as e:
+            logger.error(f"Failed to get option quote for {tradingsymbol}: {e}")
+            return 0.0
 
     def _get_instrument_token(self, symbol: str, exchange: str) -> Optional[int]:
         # For MCX base names, auto-resolve to active contract first

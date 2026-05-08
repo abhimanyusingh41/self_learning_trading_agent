@@ -19,10 +19,11 @@ class MarketAnalyzer:
         self.bd = binance_data  # BinanceData instance, optional
         self.config = config
         self.instruments = config.get("instruments", {})
-        self.equities = self.instruments.get("equities", [])
+        self.option_underlyings = self.instruments.get("option_underlyings", [])  # list of {symbol, lot_size}
         self.commodities = self.instruments.get("commodities", [])
         self.crypto = self.instruments.get("crypto", [])
         self.exchange = self.instruments.get("exchange", "NSE")
+        self.options_exchange = self.instruments.get("options_exchange", "NFO")
         self.commodity_exchange = self.instruments.get("commodity_exchange", "MCX")
 
     def build_market_context(self) -> str:
@@ -32,11 +33,11 @@ class MarketAnalyzer:
         # 1. Broad market (NIFTY/VIX) — always included
         sections.append(self._broad_market_section())
 
-        # 2. Equities — only during NSE hours
+        # 2. NSE Stock Options — only during NSE hours
         if self._is_equity_session(now_ist):
-            sections.append(self._equities_section())
+            sections.append(self._options_section())
         else:
-            sections.append("### INDIAN EQUITIES\nNSE market closed.")
+            sections.append("### NSE STOCK OPTIONS (NFO)\nNSE market closed.")
 
         # 3. Commodities (MCX) — only during MCX hours
         if self._is_commodity_session(now_ist):
@@ -71,32 +72,114 @@ class MarketAnalyzer:
         ]
         return "\n".join(lines)
 
-    def _equities_section(self) -> str:
-        if not self.equities:
-            return "### INDIAN EQUITIES\nNo equities configured."
+    def _options_section(self) -> str:
+        if not self.option_underlyings:
+            return "### NSE STOCK OPTIONS (NFO)\nNo option underlyings configured."
 
-        quotes = self.md.get_quote(self.equities, self.exchange)
-        lines = ["### INDIAN EQUITIES (NSE)"]
+        lines = ["### NSE STOCK OPTIONS (NFO) — BUY ONLY"]
 
-        for symbol in self.equities:
-            key = f"{self.exchange}:{symbol}"
-            q = quotes.get(key, {})
-            lp = q.get("last_price", 0)
-            pct = q.get("change", 0)
-            volume = q.get("volume", 0)
-            indicators = self._get_kite_indicators(symbol, self.exchange)
-            if not indicators:
-                lines.append(f"\n{symbol}: ₹{lp:.2f} ({'+' if pct >= 0 else ''}{pct:.2f}%) — no indicator data")
+        for entry in self.option_underlyings:
+            symbol = entry.get("symbol", "")
+            lot_size = entry.get("lot_size", 1)
+            if not symbol:
                 continue
+
+            try:
+                snap = self.md.get_option_chain_snapshot(symbol, num_strikes=2, lot_size=lot_size)
+            except Exception as e:
+                logger.error(f"Option chain error for {symbol}: {e}")
+                snap = {"symbol": symbol, "error": str(e)}
+
+            lines.append("")  # blank separator
+
+            if snap.get("error"):
+                # Show underlying price with note when option data is unavailable
+                up = snap.get("underlying_price", 0)
+                upct = snap.get("underlying_pct", 0)
+                if up:
+                    lines.append(
+                        f"{symbol}: ₹{up:.2f} ({'+' if upct >= 0 else ''}{upct:.2f}%) — option data unavailable"
+                    )
+                else:
+                    lines.append(f"{symbol}: option data unavailable")
+                continue
+
+            up = snap["underlying_price"]
+            upct = snap.get("underlying_pct", 0)
+            expiry = snap["expiry"]
+            dte = snap["dte"]
+            atm = snap["atm_strike"]
+            atm_ce_p = snap["atm_call_premium"]
+            atm_pe_p = snap["atm_put_premium"]
+            atm_ce_oi = snap["atm_call_oi"]
+            atm_pe_oi = snap["atm_put_oi"]
+            atm_iv = snap["atm_iv"]
+            pcr = snap["pcr"]
+            chain = snap.get("chain", {})
+
+            # Technical indicators for the underlying
+            indicators = self._get_kite_indicators(symbol, self.exchange)
+            trend = indicators.get("trend", "unknown") if indicators else "unknown"
+            rsi = indicators.get("rsi", "N/A") if indicators else "N/A"
+            rsi_zone = indicators.get("rsi_zone", "") if indicators else ""
+
+            # PCR signal
+            if pcr > 1.2:
+                pcr_signal = "BULLISH support (high put writing)"
+            elif pcr < 0.8:
+                pcr_signal = "BEARISH resistance (high call writing)"
+            else:
+                pcr_signal = "NEUTRAL"
+
+            # IV guidance
+            if atm_iv and atm_iv < 20:
+                iv_note = "IDEAL buying conditions"
+            elif atm_iv and atm_iv <= 35:
+                iv_note = "normal"
+            elif atm_iv and atm_iv > 40:
+                iv_note = "EXPENSIVE — avoid buying"
+            else:
+                iv_note = "N/A"
+
             lines.append(
-                f"\n{symbol}: ₹{lp:.2f} ({'+' if pct >= 0 else ''}{pct:.2f}%) | Vol: {volume:,} ({indicators.get('volume_ratio', 1):.1f}x)"
+                f"{symbol}: ₹{up:.2f} ({'+' if upct >= 0 else ''}{upct:.2f}%) | "
+                f"Trend: {trend} | RSI: {rsi} ({rsi_zone})"
             )
             lines.append(
-                f"  Trend: {indicators.get('trend')} | RSI: {indicators.get('rsi')} ({indicators.get('rsi_zone')}) | "
-                f"ATR: ₹{indicators.get('atr')} | Nearest pivot: {indicators.get('near_pivot_level')}"
+                f"  Expiry: {expiry} | DTE: {dte} | Lot Size: {lot_size}"
             )
-            if indicators.get("volume_surge"):
-                lines.append(f"  ** VOLUME SURGE **")
+            lines.append(
+                f"  ATM {atm}: CE ₹{atm_ce_p:.2f} (OI:{atm_ce_oi:,}) | PE ₹{atm_pe_p:.2f} (OI:{atm_pe_oi:,})"
+                + (f" | IV: {atm_iv:.1f}% ({iv_note})" if atm_iv else "")
+            )
+            lines.append(f"  PCR: {pcr} — {pcr_signal}")
+
+            # Chain table header
+            lines.append(f"  {'Strike':>8} | {'CE Symbol':<24} {'CE Prem':>8} {'CE OI':>10} | {'PE Symbol':<24} {'PE Prem':>8} {'PE OI':>10}")
+            lines.append(f"  {'-'*8}-+-{'-'*24}-{'-'*8}-{'-'*10}-+-{'-'*24}-{'-'*8}-{'-'*10}")
+
+            # Group chain by strike
+            strikes_in_chain = sorted(set(v["strike"] for v in chain.values()))
+            for strike in strikes_in_chain:
+                ce_entry = next(({"ts": ts, **v} for ts, v in chain.items() if v["strike"] == strike and v["type"] == "CE"), None)
+                pe_entry = next(({"ts": ts, **v} for ts, v in chain.items() if v["strike"] == strike and v["type"] == "PE"), None)
+                ce_ts = ce_entry["ts"] if ce_entry else ""
+                ce_p = f"₹{ce_entry['premium']:.2f}" if ce_entry else "-"
+                ce_oi = f"{ce_entry['oi']:,}" if ce_entry else "-"
+                pe_ts = pe_entry["ts"] if pe_entry else ""
+                pe_p = f"₹{pe_entry['premium']:.2f}" if pe_entry else "-"
+                pe_oi = f"{pe_entry['oi']:,}" if pe_entry else "-"
+                atm_marker = " <<ATM" if strike == atm else ""
+                lines.append(
+                    f"  {strike:>8} | {ce_ts:<24} {ce_p:>8} {ce_oi:>10} | {pe_ts:<24} {pe_p:>8} {pe_oi:>10}{atm_marker}"
+                )
+
+            # Tradable options list for brain to copy
+            lines.append(f"  TRADABLE OPTIONS (copy exact symbol):")
+            for ts, v in sorted(chain.items()):
+                direction = "CALL (BUY if bullish)" if v["type"] == "CE" else "PUT (BUY if bearish)"
+                lines.append(f"    {ts} — {direction} | Premium: ₹{v['premium']:.2f} | OI: {v['oi']:,}")
+
         return "\n".join(lines)
 
     def _commodities_section(self) -> str:

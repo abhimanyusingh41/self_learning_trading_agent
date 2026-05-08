@@ -13,26 +13,39 @@ binance:
 
 risk:
   daily_loss_limit_pct: 2.0
-  per_trade_loss_pct: 0.5
-  max_positions: 6          # increased for multi-asset
+  per_trade_loss_pct: 0.5        # equity/commodity/crypto: % of capital at risk per trade
+  options_per_trade_loss_pct: 3.0  # options: higher tolerance (premium × SL% × lot_size)
+  max_positions: 6
   max_trade_value_pct: 10.0
+  options_max_trade_value_pct: 15.0  # allow slightly larger option premium outlays
   kill_switch: false
   initial_capital: 100000
 
 instruments:
-  # Indian equities (NSE)
-  equities:
-    - RELIANCE
-    - TCS
-    - HDFCBANK
-    - INFY
-    - ICICIBANK
-    - SBIN
-    - BHARTIARTL
-    - BAJFINANCE
-    - KOTAKBANK
-    - AXISBANK
+  # Underlying stocks for option trading (actual trades go to NFO segment)
+  option_underlyings:
+    - symbol: RELIANCE
+      lot_size: 250
+    - symbol: TCS
+      lot_size: 175
+    - symbol: HDFCBANK
+      lot_size: 550
+    - symbol: INFY
+      lot_size: 400
+    - symbol: ICICIBANK
+      lot_size: 700
+    - symbol: SBIN
+      lot_size: 1500
+    - symbol: BHARTIARTL
+      lot_size: 1850
+    - symbol: BAJFINANCE
+      lot_size: 125
+    - symbol: KOTAKBANK
+      lot_size: 400
+    - symbol: AXISBANK
+      lot_size: 625
   exchange: NSE
+  options_exchange: NFO
 
   # Indian commodities (MCX)
   commodities:
