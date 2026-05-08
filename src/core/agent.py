@@ -114,12 +114,27 @@ class TradingAgent:
             logger.warning(f"Brain picked MCX symbol {symbol} but MCX is closed — skipping")
             return
 
-        # Skip if we already hold this symbol (no pyramiding into same symbol)
+        # NSE trades MUST be option symbols (CE/PE) — reject raw stock symbols
+        if equity_open and is_equity_instrument and not self._is_option_symbol(symbol):
+            logger.warning(f"Brain returned NSE stock '{symbol}' — only CE/PE options allowed, skipping")
+            return
+
+        # Skip if we already hold this exact symbol
         open_positions = self.executor.get_open_positions()
         open_symbols = {p.get("symbol") for p in open_positions}
         if decision.action in ("BUY", "SHORT") and symbol in open_symbols:
             logger.warning(f"Already have open position in {symbol} — skipping duplicate entry")
             return
+
+        # For options: also block if same underlying already has any open option position
+        if self._is_option_symbol(symbol) and decision.action in ("BUY", "SHORT"):
+            underlying = self._get_underlying_from_option(symbol)
+            for open_sym in open_symbols:
+                if self._is_option_symbol(open_sym) and open_sym.startswith(underlying):
+                    logger.warning(
+                        f"Already have open option on {underlying} ({open_sym}) — skipping {symbol}"
+                    )
+                    return
 
         # Also check crypto positions
         if hasattr(self.executor, "binance_paper"):
@@ -341,10 +356,14 @@ class TradingAgent:
                 elif t1 and current_price <= t1:
                     should_close, close_reason = True, "target_1_hit"
 
-            # EOD auto-close for intraday equity/commodity (not crypto — no EOD)
-            if (not is_crypto and now_ist.hour == 15 and now_ist.minute >= 15
-                    and trade.get("time_horizon") == "intraday"):
-                should_close, close_reason = True, "eod_auto_close"
+            # EOD auto-close ALL NSE/MCX positions — no overnight holds
+            # NSE/NFO: close at 15:15 (market closes 15:30)
+            # MCX: close at 23:15 (market closes 23:30)
+            if not is_crypto:
+                is_mcx_trade = self._is_mcx_symbol(symbol)
+                eod_h, eod_m = (23, 15) if is_mcx_trade else (15, 15)
+                if now_ist.hour == eod_h and now_ist.minute >= eod_m:
+                    should_close, close_reason = True, "eod_auto_close"
 
             if should_close:
                 exec_target = self.executor
@@ -498,10 +517,35 @@ class TradingAgent:
         mcx_symbols = set(self.config.get("instruments", {}).get("commodities", []))
         return symbol in mcx_symbols
 
+    def _cleanup_orphaned_trades(self):
+        """Close any memory trades whose positions no longer exist in the executor (e.g. after restart)."""
+        open_trades = self.memory.get_open_trades()
+        if not open_trades:
+            return
+
+        active_symbols = {p.get("symbol") for p in self.executor.get_open_positions()}
+        if hasattr(self.executor, "binance_paper"):
+            active_symbols |= {p.get("symbol") for p in self.executor.binance_paper.get_open_positions()}
+
+        for trade in open_trades:
+            symbol = trade["symbol"]
+            if symbol not in active_symbols:
+                logger.warning(f"Orphaned trade in memory: {symbol} ({trade['trade_id']}) — marking cancelled")
+                self.memory.record_trade_exit(trade["trade_id"], {
+                    "exit_price": trade.get("entry_price", 0),
+                    "exit_reason": "cancelled_on_restart",
+                    "pnl": 0.0,
+                    "brokerage": 0.0,
+                    "gross_pnl": 0.0,
+                    "lesson": "Trade orphaned after agent restart — position lost.",
+                    "lesson_tag": "operational",
+                })
+
     def run_scheduler(self, interval_minutes: int = 15):
         """Run continuously, calling run_once() every interval_minutes."""
         self._running = True
         logger.info(f"Agent started — analysis interval: {interval_minutes} min")
+        self._cleanup_orphaned_trades()
         while self._running:
             try:
                 self.run_once()
