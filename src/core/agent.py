@@ -347,17 +347,29 @@ class TradingAgent:
             t1 = float(trade.get("target_1", 0))
             should_close = False
             close_reason = ""
+            exit_price = current_price  # default: current market price
 
             if action == "BUY":
                 if sl and current_price <= sl:
                     should_close, close_reason = True, "stop_loss_hit"
+                    # Simulate real SL-M order: exit at SL price unless a gap blew >20% through it
+                    if current_price >= sl * 0.80:
+                        exit_price = sl
+                    # else: gap scenario — exit at current (worse) price, realistic for crashes
                 elif t1 and current_price >= t1:
                     should_close, close_reason = True, "target_1_hit"
+                    # Simulate real target order: exit at target price unless a gap ran >20% past it
+                    if current_price <= t1 * 1.20:
+                        exit_price = t1
             elif action == "SHORT":
                 if sl and current_price >= sl:
                     should_close, close_reason = True, "stop_loss_hit"
+                    if current_price <= sl * 1.20:
+                        exit_price = sl
                 elif t1 and current_price <= t1:
                     should_close, close_reason = True, "target_1_hit"
+                    if current_price >= t1 * 0.80:
+                        exit_price = t1
 
             # EOD auto-close ALL NSE/MCX positions — no overnight holds
             # NSE/NFO: close at 15:15 (market closes 15:30)
@@ -367,6 +379,7 @@ class TradingAgent:
                 eod_h, eod_m = (23, 15) if is_mcx_trade else (15, 15)
                 if now_ist.hour == eod_h and now_ist.minute >= eod_m:
                     should_close, close_reason = True, "eod_auto_close"
+                    exit_price = current_price  # EOD always uses market price
 
             if should_close:
                 exec_target = self.executor
@@ -378,7 +391,7 @@ class TradingAgent:
                 result = exec_target.close_position(
                     symbol=symbol,
                     quantity=float(trade["quantity"]),
-                    current_price=current_price,
+                    current_price=exit_price,
                     reason=close_reason,
                 )
                 if result.success:
