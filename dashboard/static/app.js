@@ -68,16 +68,19 @@ async function loadPositions() {
     }
 
     container.innerHTML = positions.map(p => {
+      const isCrypto = (p.symbol || "").endsWith("USDT");
+      const cur = isCrypto ? "$" : "₹";
+      const fmt = v => v == null ? "—" : `${cur}${fmtINR(v)}`;
       const badgeCls = (p.action || "").toLowerCase();
       const conf = p.confidence ? Math.round(p.confidence * 100) + "%" : "—";
       const hasCmp = p.last_cmp != null;
-      const cmpVal = hasCmp ? `₹${fmtINR(p.last_cmp)}` : "—";
+      const cmpVal = hasCmp ? fmt(p.last_cmp) : "—";
       const cmpPnl = hasCmp && p.entry_price
         ? (p.action === "BUY" ? p.last_cmp - p.entry_price : p.entry_price - p.last_cmp) * (p.quantity || 0)
         : null;
       const cmpCls = !hasCmp ? "" : (p.last_cmp >= p.entry_price && p.action === "BUY") || (p.last_cmp <= p.entry_price && p.action === "SHORT") ? "green" : "red";
       const cmpChecked = hasCmp ? `CMP as of ${toIST(p.last_cmp_time)}` : "";
-      const unrealStr = cmpPnl != null ? ` (${cmpPnl >= 0 ? "+" : ""}₹${fmtINR(cmpPnl)})` : "";
+      const unrealStr = cmpPnl != null ? ` (${cmpPnl >= 0 ? "+" : ""}${cur}${fmtINR(cmpPnl)})` : "";
       return `
         <div class="card">
           <div class="card-header">
@@ -87,7 +90,7 @@ async function loadPositions() {
           <div class="card-stats">
             <div class="stat-box">
               <div class="stat-label">Entry</div>
-              <div class="stat-value blue">₹${fmtINR(p.entry_price)}</div>
+              <div class="stat-value blue">${fmt(p.entry_price)}</div>
             </div>
             <div class="stat-box">
               <div class="stat-label">CMP</div>
@@ -99,11 +102,11 @@ async function loadPositions() {
             </div>
             <div class="stat-box">
               <div class="stat-label">Stop Loss</div>
-              <div class="stat-value red">₹${fmtINR(p.stop_loss)}</div>
+              <div class="stat-value red">${fmt(p.stop_loss)}</div>
             </div>
             <div class="stat-box">
               <div class="stat-label">Target</div>
-              <div class="stat-value green">₹${fmtINR(p.target_1)}</div>
+              <div class="stat-value green">${fmt(p.target_1)}</div>
             </div>
           </div>
           <div class="card-footer">
