@@ -158,7 +158,11 @@ async def logs(lines: int = Query(80, le=300), _=Depends(require_auth)):
     try:
         async with aiofiles.open(LOG_FILE, "r") as f:
             content = await f.read()
-        log_lines = content.strip().split("\n")
+        log_lines = content.split("\n")
+        # If file doesn't end with \n the last entry is still being written — drop it
+        if not content.endswith("\n"):
+            log_lines = log_lines[:-1]
+        log_lines = [l for l in log_lines if l.strip()]
         return {"lines": log_lines[-lines:]}
     except Exception as e:
         return {"lines": [f"Could not read log file: {e}"]}
