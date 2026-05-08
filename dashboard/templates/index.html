@@ -17,97 +17,85 @@
   </div>
 </div>
 
-<!-- Summary Section -->
-<div class="summary-section">
+<!-- Market Summary Cards: NSE | MCX | Crypto -->
+<div class="market-summary">
 
-  <!-- Capital Pools -->
-  <div class="summary-group">
-    <div class="summary-group-header">Capital Pools</div>
-    <div class="summary-cells">
-      <div class="summary-item">
-        <div class="summary-label">NSE Pool (₹)</div>
-        <div class="summary-value" id="nse-value">—</div>
-      </div>
-      <div class="summary-item">
-        <div class="summary-label">MCX Pool (₹)</div>
-        <div class="summary-value" id="mcx-value">—</div>
-      </div>
-      <div class="summary-item">
-        <div class="summary-label">Crypto Pool ($)</div>
-        <div class="summary-value" id="crypto-usdt">—</div>
-      </div>
+  <div class="mkt-card">
+    <div class="mkt-card-title">NSE</div>
+    <div class="mkt-row">
+      <span class="mkt-label">Capital</span>
+      <span class="mkt-val" id="nse-value">—</span>
+    </div>
+    <div class="mkt-row">
+      <span class="mkt-label">Today P&amp;L</span>
+      <span class="mkt-val" id="today-pnl-nse">—</span>
+    </div>
+    <div class="mkt-row">
+      <span class="mkt-label">All-Time P&amp;L</span>
+      <span class="mkt-val" id="alltime-pnl-nse">—</span>
     </div>
   </div>
 
-  <!-- All-Time P&L -->
-  <div class="summary-group">
-    <div class="summary-group-header">All-Time P&amp;L</div>
-    <div class="summary-cells">
-      <div class="summary-item">
-        <div class="summary-label">NSE (₹)</div>
-        <div class="summary-value" id="alltime-pnl-nse">—</div>
-      </div>
-      <div class="summary-item">
-        <div class="summary-label">MCX (₹)</div>
-        <div class="summary-value" id="alltime-pnl-mcx">—</div>
-      </div>
-      <div class="summary-item">
-        <div class="summary-label">Crypto ($)</div>
-        <div class="summary-value" id="alltime-pnl-crypto">—</div>
-      </div>
+  <div class="mkt-card">
+    <div class="mkt-card-title">MCX</div>
+    <div class="mkt-row">
+      <span class="mkt-label">Capital</span>
+      <span class="mkt-val" id="mcx-value">—</span>
+    </div>
+    <div class="mkt-row">
+      <span class="mkt-label">Today P&amp;L</span>
+      <span class="mkt-val" id="today-pnl-mcx">—</span>
+    </div>
+    <div class="mkt-row">
+      <span class="mkt-label">All-Time P&amp;L</span>
+      <span class="mkt-val" id="alltime-pnl-mcx">—</span>
     </div>
   </div>
 
-  <!-- Today's P&L -->
-  <div class="summary-group">
-    <div class="summary-group-header">Today&apos;s P&amp;L</div>
-    <div class="summary-cells">
-      <div class="summary-item">
-        <div class="summary-label">NSE (₹)</div>
-        <div class="summary-value" id="today-pnl-nse">—</div>
-      </div>
-      <div class="summary-item">
-        <div class="summary-label">MCX (₹)</div>
-        <div class="summary-value" id="today-pnl-mcx">—</div>
-      </div>
-      <div class="summary-item">
-        <div class="summary-label">Crypto ($)</div>
-        <div class="summary-value" id="today-pnl-crypto">—</div>
-      </div>
+  <div class="mkt-card">
+    <div class="mkt-card-title">Crypto</div>
+    <div class="mkt-row">
+      <span class="mkt-label">Capital</span>
+      <span class="mkt-val" id="crypto-usdt">—</span>
+    </div>
+    <div class="mkt-row">
+      <span class="mkt-label">Today P&amp;L</span>
+      <span class="mkt-val" id="today-pnl-crypto">—</span>
+    </div>
+    <div class="mkt-row">
+      <span class="mkt-label">All-Time P&amp;L</span>
+      <span class="mkt-val" id="alltime-pnl-crypto">—</span>
     </div>
   </div>
 
-  <!-- Stats -->
-  <div class="summary-group">
-    <div class="summary-group-header">Stats</div>
-    <div class="summary-cells">
-      <div class="summary-item">
-        <div class="summary-label">Today Trades</div>
-        <div class="summary-value" id="today-trades">—</div>
-      </div>
-      <div class="summary-item">
-        <div class="summary-label">Open Positions</div>
-        <div class="summary-value" id="open-positions">—</div>
-      </div>
-      <div class="summary-item">
-        <div class="summary-label">Win Rate</div>
-        <div class="summary-value" id="win-rate">—</div>
-      </div>
-      <div class="summary-item">
-        <div class="summary-label">W / L</div>
-        <div class="summary-value" id="total-trades">—</div>
-      </div>
-      <div class="summary-item">
-        <div class="summary-label">Brokerage</div>
-        <div class="summary-value" id="total-brokerage">—</div>
-      </div>
-      <div class="summary-item">
-        <div class="summary-label">Lessons</div>
-        <div class="summary-value" id="lessons-count">—</div>
-      </div>
-    </div>
-  </div>
+</div>
 
+<!-- Stats Strip -->
+<div class="stats-strip">
+  <div class="stat-chip">
+    <span class="stat-chip-label">Trades Today</span>
+    <span class="stat-chip-val" id="today-trades">—</span>
+  </div>
+  <div class="stat-chip">
+    <span class="stat-chip-label">Open</span>
+    <span class="stat-chip-val" id="open-positions">—</span>
+  </div>
+  <div class="stat-chip">
+    <span class="stat-chip-label">Win Rate</span>
+    <span class="stat-chip-val" id="win-rate">—</span>
+  </div>
+  <div class="stat-chip">
+    <span class="stat-chip-label">W / L</span>
+    <span class="stat-chip-val" id="total-trades">—</span>
+  </div>
+  <div class="stat-chip">
+    <span class="stat-chip-label">Brokerage</span>
+    <span class="stat-chip-val" id="total-brokerage">—</span>
+  </div>
+  <div class="stat-chip">
+    <span class="stat-chip-label">Lessons</span>
+    <span class="stat-chip-val" id="lessons-count">—</span>
+  </div>
 </div>
 
 <!-- Main Content -->

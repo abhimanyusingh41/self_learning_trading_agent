@@ -50,7 +50,8 @@ function set(id, val, cls) {
   const el = document.getElementById(id);
   if (!el) return;
   el.textContent = val;
-  el.className = "summary-value" + (cls ? " " + cls : "");
+  el.classList.remove("green", "red", "blue");
+  if (cls) el.classList.add(cls);
 }
 
 // ── Open Positions ────────────────────────────────────────
