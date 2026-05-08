@@ -67,6 +67,14 @@ async function loadPositions() {
     container.innerHTML = positions.map(p => {
       const badgeCls = (p.action || "").toLowerCase();
       const conf = p.confidence ? Math.round(p.confidence * 100) + "%" : "—";
+      const hasCmp = p.last_cmp != null;
+      const cmpVal = hasCmp ? `₹${fmtINR(p.last_cmp)}` : "—";
+      const cmpPnl = hasCmp && p.entry_price
+        ? (p.action === "BUY" ? p.last_cmp - p.entry_price : p.entry_price - p.last_cmp) * (p.quantity || 0)
+        : null;
+      const cmpCls = !hasCmp ? "" : (p.last_cmp >= p.entry_price && p.action === "BUY") || (p.last_cmp <= p.entry_price && p.action === "SHORT") ? "green" : "red";
+      const cmpChecked = hasCmp ? `CMP as of ${toIST(p.last_cmp_time)}` : "";
+      const unrealStr = cmpPnl != null ? ` (${cmpPnl >= 0 ? "+" : ""}₹${fmtINR(cmpPnl)})` : "";
       return `
         <div class="card">
           <div class="card-header">
@@ -77,6 +85,10 @@ async function loadPositions() {
             <div class="stat-box">
               <div class="stat-label">Entry</div>
               <div class="stat-value blue">₹${fmtINR(p.entry_price)}</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">CMP</div>
+              <div class="stat-value ${cmpCls}">${cmpVal}${unrealStr}</div>
             </div>
             <div class="stat-box">
               <div class="stat-label">Qty</div>
@@ -96,6 +108,7 @@ async function loadPositions() {
             <span class="tag">${p.time_horizon || "—"}</span>
             <span style="float:right">Confidence: <b>${conf}</b></span>
             <br><span style="color:var(--muted);font-size:10px;">Entry: ${toIST(p.entry_time)}</span>
+            ${cmpChecked ? `<br><span style="color:var(--muted);font-size:10px;">${cmpChecked}</span>` : ""}
           </div>
         </div>`;
     }).join("");

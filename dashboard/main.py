@@ -104,6 +104,8 @@ async def positions(_=Depends(require_auth)):
             "confidence": t.get("confidence"),
             "time_horizon": t.get("time_horizon"),
             "entry_time": entry_time,
+            "last_cmp": t.get("last_cmp"),
+            "last_cmp_time": t.get("last_cmp_time"),
         })
     return result
 

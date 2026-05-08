@@ -339,6 +339,9 @@ class TradingAgent:
             if not current_price:
                 continue
 
+            # Persist the latest checked price so the dashboard can show it
+            self.memory.update_trade_cmp(trade["trade_id"], current_price)
+
             action = trade["action"]
             sl = float(trade.get("stop_loss", 0))
             t1 = float(trade.get("target_1", 0))

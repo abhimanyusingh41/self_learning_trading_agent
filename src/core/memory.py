@@ -115,6 +115,15 @@ class TradeMemory:
             f"Best: ₹{s['best_trade_pnl']:,.2f} | Worst: ₹{s['worst_trade_pnl']:,.2f}"
         )
 
+    def update_trade_cmp(self, trade_id: str, price: float):
+        """Record the last checked market price on an open trade."""
+        for trade in self._data["trades"]:
+            if trade["trade_id"] == trade_id and trade.get("status") == "open":
+                trade["last_cmp"] = price
+                trade["last_cmp_time"] = datetime.now().isoformat()
+                self._save()
+                return
+
     def get_open_trades(self) -> list:
         return [t for t in self._data["trades"] if t.get("status") == "open"]
 
