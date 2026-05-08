@@ -72,6 +72,11 @@ class PaperTrader(BaseExecutor):
         order_id = str(uuid.uuid4())[:10]
 
         if action in ("BUY", "SHORT"):
+            if symbol in self.positions:
+                return OrderResult(
+                    False, None, symbol, action, quantity, exec_price,
+                    f"Already have open {self.positions[symbol]['action']} position in {symbol} — close it first"
+                )
             self.positions[symbol] = {
                 "symbol": symbol,
                 "action": action,

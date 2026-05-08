@@ -110,8 +110,21 @@ class TradingAgent:
             logger.warning(f"Brain picked MCX symbol {symbol} but MCX is closed — skipping")
             return
 
-        # Risk check — use USDT balance for crypto, INR capital for equities
+        # Skip if we already hold this symbol (no pyramiding into same symbol)
         open_positions = self.executor.get_open_positions()
+        open_symbols = {p.get("symbol") for p in open_positions}
+        if decision.action in ("BUY", "SHORT") and symbol in open_symbols:
+            logger.warning(f"Already have open position in {symbol} — skipping duplicate entry")
+            return
+
+        # Also check crypto positions
+        if hasattr(self.executor, "binance_paper"):
+            crypto_open_symbols = {p.get("symbol") for p in self.executor.binance_paper.get_open_positions()}
+            if decision.action in ("BUY", "SHORT") and symbol in crypto_open_symbols:
+                logger.warning(f"Already have open crypto position in {symbol} — skipping duplicate entry")
+                return
+
+        # Risk check — use USDT balance for crypto, INR capital for equities
         is_crypto_trade = symbol in self._crypto_symbols
 
         if is_crypto_trade:
