@@ -17,68 +17,97 @@
   </div>
 </div>
 
-<!-- Summary Strip -->
-<div class="summary-strip">
-  <div class="summary-item">
-    <div class="summary-label">NSE Pool (₹)</div>
-    <div class="summary-value" id="nse-value">—</div>
+<!-- Summary Section -->
+<div class="summary-section">
+
+  <!-- Capital Pools -->
+  <div class="summary-group">
+    <div class="summary-group-label">Capital</div>
+    <div class="summary-cells">
+      <div class="summary-item">
+        <div class="summary-label">NSE Pool (₹)</div>
+        <div class="summary-value" id="nse-value">—</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-label">MCX Pool (₹)</div>
+        <div class="summary-value" id="mcx-value">—</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-label">Crypto Pool ($)</div>
+        <div class="summary-value" id="crypto-usdt">—</div>
+      </div>
+    </div>
   </div>
-  <div class="summary-item">
-    <div class="summary-label">MCX Pool (₹)</div>
-    <div class="summary-value" id="mcx-value">—</div>
+
+  <!-- All-Time P&L -->
+  <div class="summary-group">
+    <div class="summary-group-label">All-Time P&amp;L</div>
+    <div class="summary-cells">
+      <div class="summary-item">
+        <div class="summary-label">NSE (₹)</div>
+        <div class="summary-value" id="alltime-pnl-nse">—</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-label">MCX (₹)</div>
+        <div class="summary-value" id="alltime-pnl-mcx">—</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-label">Crypto ($)</div>
+        <div class="summary-value" id="alltime-pnl-crypto">—</div>
+      </div>
+    </div>
   </div>
-  <div class="summary-item">
-    <div class="summary-label">Crypto Pool ($)</div>
-    <div class="summary-value" id="crypto-usdt">—</div>
+
+  <!-- Today's P&L -->
+  <div class="summary-group">
+    <div class="summary-group-label">Today&apos;s P&amp;L</div>
+    <div class="summary-cells">
+      <div class="summary-item">
+        <div class="summary-label">NSE (₹)</div>
+        <div class="summary-value" id="today-pnl-nse">—</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-label">MCX (₹)</div>
+        <div class="summary-value" id="today-pnl-mcx">—</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-label">Crypto ($)</div>
+        <div class="summary-value" id="today-pnl-crypto">—</div>
+      </div>
+    </div>
   </div>
-  <div class="summary-item">
-    <div class="summary-label">NSE All-Time (₹)</div>
-    <div class="summary-value" id="alltime-pnl-nse">—</div>
+
+  <!-- Stats -->
+  <div class="summary-group">
+    <div class="summary-group-label">Stats</div>
+    <div class="summary-cells cols-6">
+      <div class="summary-item">
+        <div class="summary-label">Today Trades</div>
+        <div class="summary-value" id="today-trades">—</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-label">Open Positions</div>
+        <div class="summary-value" id="open-positions">—</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-label">Win Rate</div>
+        <div class="summary-value" id="win-rate">—</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-label">W / L</div>
+        <div class="summary-value" id="total-trades">—</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-label">Brokerage</div>
+        <div class="summary-value" id="total-brokerage">—</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-label">Lessons</div>
+        <div class="summary-value" id="lessons-count">—</div>
+      </div>
+    </div>
   </div>
-  <div class="summary-item">
-    <div class="summary-label">MCX All-Time (₹)</div>
-    <div class="summary-value" id="alltime-pnl-mcx">—</div>
-  </div>
-  <div class="summary-item">
-    <div class="summary-label">Crypto All-Time ($)</div>
-    <div class="summary-value" id="alltime-pnl-crypto">—</div>
-  </div>
-  <div class="summary-item">
-    <div class="summary-label">NSE Today (₹)</div>
-    <div class="summary-value" id="today-pnl-nse">—</div>
-  </div>
-  <div class="summary-item">
-    <div class="summary-label">MCX Today (₹)</div>
-    <div class="summary-value" id="today-pnl-mcx">—</div>
-  </div>
-  <div class="summary-item">
-    <div class="summary-label">Crypto Today ($)</div>
-    <div class="summary-value" id="today-pnl-crypto">—</div>
-  </div>
-  <div class="summary-item">
-    <div class="summary-label">Today's Trades</div>
-    <div class="summary-value" id="today-trades">—</div>
-  </div>
-  <div class="summary-item">
-    <div class="summary-label">Open Positions</div>
-    <div class="summary-value" id="open-positions">—</div>
-  </div>
-  <div class="summary-item">
-    <div class="summary-label">Win Rate</div>
-    <div class="summary-value" id="win-rate">—</div>
-  </div>
-  <div class="summary-item">
-    <div class="summary-label">Trades (W/L)</div>
-    <div class="summary-value" id="total-trades">—</div>
-  </div>
-  <div class="summary-item">
-    <div class="summary-label">Brokerage Paid</div>
-    <div class="summary-value" id="total-brokerage">—</div>
-  </div>
-  <div class="summary-item">
-    <div class="summary-label">Lessons Learned</div>
-    <div class="summary-value" id="lessons-count">—</div>
-  </div>
+
 </div>
 
 <!-- Main Content -->
