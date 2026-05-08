@@ -29,18 +29,23 @@ class MarketAnalyzer:
     def build_market_context(self) -> str:
         sections = []
         now_ist = datetime.now(IST)
+        equity_open = self._is_equity_session(now_ist)
+        commodity_open = self._is_commodity_session(now_ist)
 
-        # 1. Broad market (NIFTY/VIX) — always included
-        sections.append(self._broad_market_section())
+        # 1. Broad market (NIFTY/VIX) — only when NSE or MCX is open (avoids Kite timeouts overnight)
+        if equity_open or commodity_open:
+            sections.append(self._broad_market_section())
+        else:
+            sections.append("### BROAD MARKET\nNSE and MCX both closed — no Kite data fetched.")
 
         # 2. NSE Stock Options — only during NSE hours
-        if self._is_equity_session(now_ist):
+        if equity_open:
             sections.append(self._options_section())
         else:
             sections.append("### NSE STOCK OPTIONS (NFO)\nNSE market closed.")
 
         # 3. Commodities (MCX) — only during MCX hours
-        if self._is_commodity_session(now_ist):
+        if commodity_open:
             sections.append(self._commodities_section())
         else:
             sections.append("### MCX COMMODITIES\nMCX market closed.")
