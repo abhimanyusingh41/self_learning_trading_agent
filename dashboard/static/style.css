@@ -196,12 +196,13 @@ tr.loss { border-left: 3px solid var(--red); }
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 14px;
-  height: 360px;
+  padding: 14px 14px 28px;
+  height: 400px;
   overflow-y: auto;
   font-family: "Consolas", "Fira Code", monospace;
   font-size: 12px;
   line-height: 1.6;
+  word-break: break-word;
 }
 .log-box::-webkit-scrollbar { width: 6px; }
 .log-box::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
