@@ -85,7 +85,9 @@ async function loadPositions() {
         : null;
       const cmpCls = !hasCmp ? "" : (p.last_cmp >= p.entry_price && p.action === "BUY") || (p.last_cmp <= p.entry_price && p.action === "SHORT") ? "green" : "red";
       const cmpChecked = hasCmp ? `CMP as of ${toIST(p.last_cmp_time)}` : "";
-      const unrealStr = cmpPnl != null ? ` (${cmpPnl >= 0 ? "+" : ""}${cur}${fmtINR(cmpPnl)})` : "";
+      const unrealStr = cmpPnl != null
+        ? ` (${cmpPnl >= 0 ? "+" + cur + fmtINR(cmpPnl) : "-" + cur + fmtINR(Math.abs(cmpPnl))})`
+        : "";
       return `
         <div class="card">
           <div class="card-header">
