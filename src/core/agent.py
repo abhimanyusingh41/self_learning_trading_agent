@@ -117,7 +117,7 @@ class TradingAgent:
         )
 
         if decision.action in ("WAIT", "HOLD"):
-            logger.info(f"Brain says wait: {decision.rationale[:200]}")
+            logger.info(f"Brain says wait: {decision.rationale}")
             return
 
         # Validate: don't trade NSE options/equities when market is closed
