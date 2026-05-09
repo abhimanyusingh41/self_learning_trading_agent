@@ -10,5 +10,3 @@ loguru>=0.7.2
 apscheduler>=3.10.4
 requests>=2.31.0
 pytz>=2024.1
-azure-identity>=1.15.0
-azure-keyvault-secrets>=4.7.0
