@@ -42,8 +42,7 @@ body {
 .market-summary {
   display: flex;
   gap: 10px;
-  padding: 12px;
-  border-bottom: 1px solid var(--border);
+  padding: 12px 12px 8px;
 }
 .mkt-card {
   flex: 1;
