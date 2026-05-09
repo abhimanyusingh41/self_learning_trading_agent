@@ -24,6 +24,24 @@ from loguru import logger
 load_dotenv()
 
 
+def _load_keyvault_secrets():
+    """Fetch secrets from Azure Key Vault using Managed Identity and inject into env."""
+    vault_url = "https://tradingkvlje77ohmfrs5c.vault.azure.net"
+    try:
+        from azure.identity import ManagedIdentityCredential
+        from azure.keyvault.secrets import SecretClient
+        credential = ManagedIdentityCredential()
+        client = SecretClient(vault_url=vault_url, credential=credential)
+        secret = client.get_secret("ANTHROPIC-SELF-LEARNING-KEY")
+        os.environ["ANTHROPIC_API_KEY"] = secret.value
+        logger.info("Anthropic API key loaded from Key Vault")
+    except Exception as e:
+        logger.warning(f"Key Vault fetch failed, falling back to env: {e}")
+
+
+_load_keyvault_secrets()
+
+
 def load_config(config_path: str = "config/config.yaml") -> dict:
     with open(config_path) as f:
         content = f.read()
