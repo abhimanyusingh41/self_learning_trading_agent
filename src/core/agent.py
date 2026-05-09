@@ -102,6 +102,18 @@ class TradingAgent:
         session_note = self._session_note(equity_open, commodity_open)
         full_context = f"{session_note}\n\n{market_context}"
 
+        # Skip brain call if every tradeable pool is already at max positions
+        max_pos = self.risk._max_positions
+        nse_open = len(self.executor.get_open_positions())
+        mcx_open = len(self.executor.mcx_paper.get_open_positions()) if hasattr(self.executor, "mcx_paper") else max_pos
+        crypto_open_count = len(self.executor.binance_paper.get_open_positions()) if hasattr(self.executor, "binance_paper") else max_pos
+        nse_full = not equity_open or nse_open >= max_pos
+        mcx_full = not commodity_open or mcx_open >= max_pos
+        crypto_full = crypto_open_count >= max_pos
+        if nse_full and mcx_full and crypto_full:
+            logger.info("All tradeable pools at max positions — skipping brain call")
+            return
+
         # Brain decides
         logger.info("Asking brain for trade decision...")
         decision = self.brain.analyze_and_decide(
@@ -696,8 +708,8 @@ class TradingAgent:
         logger.info(f"Agent started — full cycle: {interval_minutes} min | options SL check: 3 min")
         self._cleanup_orphaned_trades()
 
-        FULL_CYCLE_SECS = interval_minutes * 60
         OPTIONS_CHECK_SECS = 3 * 60
+        CRYPTO_ONLY_SECS = 30 * 60  # slower cadence when only crypto is open
         last_full_run = 0.0  # force immediate full run on startup
 
         while self._running:
@@ -710,8 +722,13 @@ class TradingAgent:
             except Exception as e:
                 logger.error(f"Options exit check error: {e}", exc_info=True)
 
-            # Full cycle — runs every 10 min
-            if loop_start - last_full_run >= FULL_CYCLE_SECS:
+            # Dynamic full-cycle interval: normal when NSE/MCX open, 30 min when crypto-only
+            equity_open_now = self._is_equity_session(now_ist)
+            commodity_open_now = self._is_commodity_session(now_ist)
+            effective_secs = interval_minutes * 60 if (equity_open_now or commodity_open_now) else CRYPTO_ONLY_SECS
+
+            # Full cycle
+            if loop_start - last_full_run >= effective_secs:
                 try:
                     self.run_once()
                     last_full_run = loop_start
