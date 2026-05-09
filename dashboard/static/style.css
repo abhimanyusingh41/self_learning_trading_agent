@@ -79,7 +79,10 @@ body {
   flex-wrap: wrap;
   gap: 1px;
   background: var(--border);
-  border-bottom: 2px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  margin: 0 12px 12px;
+  border-radius: 10px;
+  overflow: hidden;
 }
 .stat-chip {
   flex: 0 0 calc(33.333% - 1px);
