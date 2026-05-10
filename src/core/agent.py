@@ -371,7 +371,9 @@ class TradingAgent:
             is_crypto = symbol in self._crypto_symbols
             is_option = self._is_option_symbol(symbol)
 
-            if options_only and not is_option:
+            # Fast loop: check options AND crypto (both need tight SL/target monitoring)
+            # Skip only MCX/equity in the fast loop
+            if options_only and not is_option and not is_crypto:
                 continue
 
             is_mcx = self._is_mcx_symbol(symbol)
@@ -427,6 +429,18 @@ class TradingAgent:
                     should_close, close_reason = True, "target_1_hit"
                     if current_price >= t1 * 0.80:
                         exit_price = t1
+
+            # Intraday timeout: close crypto intraday positions open > 8 hours
+            if is_crypto and not should_close and trade.get("time_horizon") in ("intraday", "day", "short-term"):
+                try:
+                    entry_dt = datetime.fromisoformat(trade["entry_time"])
+                    hours_open = (now_ist - entry_dt.astimezone(IST)).total_seconds() / 3600
+                    if hours_open >= 8:
+                        should_close, close_reason = True, "intraday_timeout_8h"
+                        exit_price = current_price
+                        logger.info(f"Intraday timeout: {symbol} open {hours_open:.1f}h — closing at market")
+                except Exception:
+                    pass
 
             # EOD auto-close ALL NSE/MCX positions — no overnight holds
             # NSE/NFO: close at 15:15 (market closes 15:30)
