@@ -67,6 +67,8 @@ instruments:
     - BNBUSDT
     - SOLUSDT
     - XRPUSDT
+    - DOGEUSDT
+    - AAVEUSDT
 
 agent:
   model: claude-opus-4-7

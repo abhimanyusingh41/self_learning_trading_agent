@@ -59,8 +59,9 @@ EXPERT_TRADER_SYSTEM_PROMPT = """You are an expert multi-asset trader with 20+ y
 - Funding rates: positive = market is long-heavy (potential squeeze down); negative = bearish (squeeze up)
 - Crypto volatility is 3–5x equity volatility — use tighter position sizes
 - Cross-asset signal: Gold up + BTC up = risk-off AND inflation hedge demand; Gold up + BTC down = pure risk-off
-- Position sizes for $500 USDT budget: BTC 0.001–0.002 | ETH 0.02–0.05 | SOL 0.5–1.5 | XRP 50–150 | BNB 0.1–0.3
-- Stop loss: 2–3% for BTC/ETH; 3–5% for SOL/BNB/XRP; risk per trade max 2% of $500 = $10
+- Position sizes for $500 USDT budget: BTC 0.001–0.002 | ETH 0.02–0.05 | SOL 0.5–1.5 | XRP 50–150 | BNB 0.1–0.3 | DOGE 200–500 | AAVE 0.3–0.8
+- DOGE: high volatility meme coin, strong momentum plays, wider stops (4–6%); AAVE: DeFi blue chip, follows ETH sentiment
+- Stop loss: 2–3% for BTC/ETH/AAVE; 3–5% for SOL/BNB/XRP; 4–6% for DOGE; risk per trade max 2% of $500 = $10
 - Confidence threshold for crypto: 0.55 (slightly lower than equity; crypto has clearer technical patterns 24x7)
 
 **Risk Management per capital pool (HARD RULES — NEVER VIOLATE):**
