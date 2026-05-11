@@ -86,7 +86,7 @@ async def summary(_=Depends(require_auth)):
         "alltime_pnl_nse": alltime_pnl_nse,
         "alltime_pnl_mcx": alltime_pnl_mcx,
         "alltime_pnl_crypto_usd": alltime_pnl_crypto_usd,
-        "total_brokerage": stats.get("total_brokerage", 0.0),
+        "total_brokerage": round(sum(t.get("brokerage", 0) for t in closed_trades), 2),
         "today_pnl_nse": today_pnl_nse,
         "today_pnl_mcx": today_pnl_mcx,
         "today_pnl_crypto_usd": today_pnl_crypto_usd,
