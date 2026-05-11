@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Trading Agent Dashboard</title>
-  <link rel="stylesheet" href="/static/style.css?v=9">
+  <link rel="stylesheet" href="/static/style.css?v=10">
 </head>
 <body>
 
@@ -34,6 +34,10 @@
       <span class="mkt-label">All-Time P&amp;L</span>
       <span class="mkt-val" id="alltime-pnl-nse">—</span>
     </div>
+    <div class="mkt-row">
+      <span class="mkt-label">Brokerage</span>
+      <span class="mkt-val" id="brokerage-nse">—</span>
+    </div>
   </div>
 
   <div class="mkt-card">
@@ -49,6 +53,10 @@
     <div class="mkt-row">
       <span class="mkt-label">All-Time P&amp;L</span>
       <span class="mkt-val" id="alltime-pnl-mcx">—</span>
+    </div>
+    <div class="mkt-row">
+      <span class="mkt-label">Brokerage</span>
+      <span class="mkt-val" id="brokerage-mcx">—</span>
     </div>
   </div>
 
@@ -157,8 +165,19 @@
     <!-- Lessons Learned -->
     <div>
       <div class="section-header">Lessons Learned by Agent</div>
-      <div class="lessons-list" id="lessons-list">
+      <div class="lessons-table-wrap" id="lessons-list">
         <div class="empty">Loading...</div>
+      </div>
+      <!-- Lesson detail modal -->
+      <div class="lesson-modal" id="lesson-modal" style="display:none">
+        <div class="lesson-modal-box">
+          <div class="lesson-modal-header">
+            <span class="lesson-modal-tag" id="modal-tag"></span>
+            <span class="lesson-modal-time" id="modal-time"></span>
+            <button class="lesson-modal-close" onclick="closeLessonModal()">&#x2715;</button>
+          </div>
+          <div class="lesson-modal-body" id="modal-body"></div>
+        </div>
       </div>
     </div>
 
@@ -172,6 +191,6 @@
 
 </div>
 
-<script src="/static/app.js?v=7"></script>
+<script src="/static/app.js?v=8"></script>
 </body>
 </html>

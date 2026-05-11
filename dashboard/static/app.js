@@ -33,6 +33,11 @@ async function loadSummary() {
     set("today-pnl-nse", `${pnlSign(d.today_pnl_nse)}₹${fmtINR(d.today_pnl_nse)}`, colorClass(d.today_pnl_nse));
     set("today-pnl-mcx", `${pnlSign(d.today_pnl_mcx)}₹${fmtINR(d.today_pnl_mcx)}`, colorClass(d.today_pnl_mcx));
     set("today-pnl-crypto", `${pnlSign(d.today_pnl_crypto_usd)}$${fmtINR(d.today_pnl_crypto_usd)}`, colorClass(d.today_pnl_crypto_usd));
+
+    // Per-pool brokerage in market cards
+    set("brokerage-nse", d.alltime_brokerage_nse != null ? `-₹${fmtINR(d.alltime_brokerage_nse)}` : "—", d.alltime_brokerage_nse > 0 ? "red" : "");
+    set("brokerage-mcx", d.alltime_brokerage_mcx != null ? `-₹${fmtINR(d.alltime_brokerage_mcx)}` : "—", "");
+
     set("today-trades", d.today_trades, "blue");
     set("open-positions", d.open_positions, "blue");
     set("win-rate", `${d.win_rate}%`, d.win_rate >= 50 ? "green" : "red");
@@ -177,29 +182,60 @@ async function loadTrades() {
 }
 
 // ── Lessons ───────────────────────────────────────────────
+let _lessons = [];
+
 async function loadLessons() {
   try {
-    const r = await fetch("/api/lessons?limit=15");
-    const lessons = await r.json();
+    const r = await fetch("/api/lessons?limit=50");
+    _lessons = await r.json();
     const container = document.getElementById("lessons-list");
 
-    if (!lessons.length) {
+    if (!_lessons.length) {
       container.innerHTML = '<div class="empty">No lessons yet — agent learns after each closed trade</div>';
       return;
     }
 
-    container.innerHTML = lessons.map(l => `
-      <div class="lesson-item">
-        <span class="lesson-tag">${l.tag || "general"}</span>
-        <div>
-          <div class="lesson-text">${l.lesson}</div>
-          <div class="lesson-time">${toIST(l.timestamp)}</div>
-        </div>
-      </div>`).join("");
+    container.innerHTML = `
+      <table class="lessons-tbl">
+        <thead>
+          <tr>
+            <th style="width:36px">#</th>
+            <th>Tag</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${_lessons.map((l, i) => `
+            <tr class="lesson-row" onclick="openLessonModal(${i})">
+              <td class="lesson-num">${_lessons.length - i}</td>
+              <td><span class="lesson-tag">${escHtml(l.tag || "general")}</span></td>
+              <td class="lesson-date">${toIST(l.timestamp)}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>`;
   } catch (e) {
     console.error("Lessons load error:", e);
   }
 }
+
+function openLessonModal(idx) {
+  const l = _lessons[idx];
+  if (!l) return;
+  document.getElementById("modal-tag").textContent = l.tag || "general";
+  document.getElementById("modal-time").textContent = toIST(l.timestamp);
+  document.getElementById("modal-body").textContent = l.lesson;
+  document.getElementById("lesson-modal").style.display = "flex";
+}
+
+function closeLessonModal() {
+  document.getElementById("lesson-modal").style.display = "none";
+}
+
+// Close modal on backdrop click
+document.addEventListener("click", e => {
+  const modal = document.getElementById("lesson-modal");
+  if (modal && e.target === modal) closeLessonModal();
+});
 
 // ── Logs ──────────────────────────────────────────────────
 async function loadLogs() {

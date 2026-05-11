@@ -38,8 +38,8 @@ class TradeReflector:
         else:  # SHORT/SELL
             gross_pnl = (entry_price - exit_price) * quantity
 
-        # Brokerage: ₹20 per trade leg for NSE equities (₹40 round trip)
-        brokerage = 40.0 if asset_class == "equity" else 0.0
+        # Brokerage: ₹20 per trade leg for NSE (equity + options/NFO), ₹40 round trip
+        brokerage = 40.0 if asset_class in ("equity", "option") else 0.0
         net_pnl = gross_pnl - brokerage
 
         exit_data = {

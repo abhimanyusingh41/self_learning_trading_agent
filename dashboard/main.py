@@ -72,6 +72,10 @@ async def summary(_=Depends(require_auth)):
     today_pnl_mcx = round(sum(t.get("pnl", 0) for t in today_trades if t.get("asset_class") == "mcx"), 2)
     today_pnl_crypto_usd = round(sum(t.get("pnl", 0) for t in today_trades if t.get("asset_class") == "crypto"), 2)
     today_brokerage = sum(t.get("brokerage", 0) for t in today_trades)
+    today_brokerage_nse = round(sum(t.get("brokerage", 0) for t in today_trades if t.get("asset_class") in ("option", "equity")), 2)
+    today_brokerage_mcx = round(sum(t.get("brokerage", 0) for t in today_trades if t.get("asset_class") == "mcx"), 2)
+    alltime_brokerage_nse = round(sum(t.get("brokerage", 0) for t in closed_trades if t.get("asset_class") in ("option", "equity")), 2)
+    alltime_brokerage_mcx = round(sum(t.get("brokerage", 0) for t in closed_trades if t.get("asset_class") == "mcx"), 2)
 
     return {
         "portfolio_value": stats.get("portfolio_value"),
@@ -87,6 +91,10 @@ async def summary(_=Depends(require_auth)):
         "today_pnl_mcx": today_pnl_mcx,
         "today_pnl_crypto_usd": today_pnl_crypto_usd,
         "today_brokerage": round(today_brokerage, 2),
+        "today_brokerage_nse": today_brokerage_nse,
+        "today_brokerage_mcx": today_brokerage_mcx if today_brokerage_mcx else None,
+        "alltime_brokerage_nse": alltime_brokerage_nse,
+        "alltime_brokerage_mcx": alltime_brokerage_mcx if alltime_brokerage_mcx else None,
         "today_trades": len(today_trades),
         "open_positions": len(open_trades),
         "total_trades": total,
