@@ -692,8 +692,8 @@ class TradingAgent:
             is_crypto = symbol in self._crypto_symbols
             is_option = self._is_option_symbol(symbol)
             is_mcx = self._is_mcx_symbol(symbol)
-            entry_price = float(trade.get("entry_price", 0))
-            quantity = trade.get("quantity", 0)
+            entry_price = float(trade.get("entry_price") or 0)
+            quantity = trade.get("quantity") or 0
 
             if is_option:
                 # Rebuild the position in PaperTrader so SL/target checks keep working
@@ -702,8 +702,8 @@ class TradingAgent:
                     "action": trade.get("action", "BUY"),
                     "quantity": int(quantity),
                     "entry_price": entry_price,
-                    "stop_loss": float(trade.get("stop_loss", 0)),
-                    "target": float(trade.get("target_1", 0)),
+                    "stop_loss": float(trade.get("stop_loss") or 0),
+                    "target": float(trade.get("target_1") or 0),
                     "order_id": trade.get("order_id", "restored"),
                     "entry_time": trade.get("entry_time", ""),
                 }
@@ -722,8 +722,8 @@ class TradingAgent:
                     "action": trade.get("action", "BUY"),
                     "quantity": qty,
                     "entry_price": entry_price,
-                    "stop_loss": float(trade.get("stop_loss", 0)),
-                    "target": float(trade.get("target_1", 0)),
+                    "stop_loss": float(trade.get("stop_loss") or 0),
+                    "target": float(trade.get("target_1") or 0),
                     "order_id": trade.get("order_id", "restored"),
                     "entry_time": trade.get("entry_time", ""),
                 }
@@ -742,8 +742,8 @@ class TradingAgent:
                     "action": trade.get("action", "BUY"),
                     "quantity": int(quantity),
                     "entry_price": entry_price,
-                    "stop_loss": float(trade.get("stop_loss", 0)),
-                    "target": float(trade.get("target_1", 0)),
+                    "stop_loss": float(trade.get("stop_loss") or 0),
+                    "target": float(trade.get("target_1") or 0),
                     "order_id": trade.get("order_id", "restored"),
                     "entry_time": trade.get("entry_time", ""),
                 }
