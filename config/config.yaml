@@ -72,7 +72,7 @@ instruments:
 
 agent:
   model: claude-opus-4-7
-  max_tokens: 2000
+  max_tokens: 4000
   analysis_interval_minutes: 20
   reflection_enabled: true
   memory_file: data/memory/trade_memory.json

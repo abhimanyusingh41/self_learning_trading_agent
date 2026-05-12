@@ -616,8 +616,9 @@ class TradingAgent:
         return option_symbol  # fallback: return the full symbol
 
     def _is_mcx_symbol(self, symbol: str) -> bool:
-        mcx_symbols = set(self.config.get("instruments", {}).get("commodities", []))
-        return symbol in mcx_symbols
+        mcx_bases = set(self.config.get("instruments", {}).get("commodities", []))
+        # Match base names (GOLD) and resolved futures symbols (GOLD26MAYFUT, GOLDPETAL26MAYFUT)
+        return symbol in mcx_bases or any(symbol.upper().startswith(base.upper()) for base in mcx_bases)
 
     def _cleanup_orphaned_trades(self):
         """

@@ -158,28 +158,35 @@ class TradingBrain:
             market_context, lessons_from_memory, portfolio_state, capital, mcx_capital, crypto_usdt
         )
 
-        try:
-            response = self.client.messages.create(
-                model=self.model,
-                max_tokens=self.max_tokens,
-                thinking={"type": "adaptive"},
-                output_config={"effort": "high"},
-                system=[
-                    {
-                        "type": "text",
-                        "text": EXPERT_TRADER_SYSTEM_PROMPT,
-                        "cache_control": {"type": "ephemeral"},
-                    }
-                ],
-                messages=[{"role": "user", "content": prompt}],
-            )
+        for attempt in range(2):
+            try:
+                response = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=self.max_tokens,
+                    thinking={"type": "adaptive"},
+                    output_config={"effort": "high"},
+                    system=[
+                        {
+                            "type": "text",
+                            "text": EXPERT_TRADER_SYSTEM_PROMPT,
+                            "cache_control": {"type": "ephemeral"},
+                        }
+                    ],
+                    messages=[{"role": "user", "content": prompt}],
+                )
 
-            raw_text = self._extract_text(response)
-            return self._parse_decision(raw_text)
+                raw_text = self._extract_text(response)
+                if not raw_text.strip():
+                    logger.warning(f"Brain returned empty response (attempt {attempt + 1}/2), retrying...")
+                    continue
+                return self._parse_decision(raw_text)
 
-        except Exception as e:
-            logger.error(f"Brain.analyze_and_decide failed: {e}")
-            return self._wait_decision(str(e))
+            except Exception as e:
+                logger.error(f"Brain.analyze_and_decide failed (attempt {attempt + 1}/2): {e}")
+                if attempt == 0:
+                    continue
+
+        return self._wait_decision("Brain returned no response after 2 attempts")
 
     def reflect_on_trade(
         self,
@@ -290,24 +297,46 @@ For crypto trades: trade when confidence >= 0.55 and a clear technical setup exi
 
         try:
             data = json.loads(text)
-            return TradeDecision(
-                action=data.get("action", "WAIT").upper(),
-                symbol=data.get("symbol"),
-                quantity=data.get("quantity"),
-                entry_price=data.get("entry_price"),
-                stop_loss=data.get("stop_loss"),
-                target_1=data.get("target_1"),
-                target_2=data.get("target_2"),
-                confidence=float(data.get("confidence", 0.0)),
-                rationale=data.get("rationale", ""),
-                key_risks=data.get("key_risks", []),
-                time_horizon=data.get("time_horizon", "intraday"),
-                setup_type=data.get("setup_type"),
-                raw_response=raw_text,
-            )
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse brain response as JSON: {e}\nRaw: {raw_text[:500]}")
-            return self._wait_decision(f"JSON parse error: {e}")
+        except json.JSONDecodeError:
+            # Response was likely truncated mid-string due to token limit — attempt repair
+            repaired = self._repair_truncated_json(text)
+            try:
+                data = json.loads(repaired)
+                logger.warning("Brain JSON was truncated — repaired successfully")
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse brain response as JSON: {e}\nRaw: {raw_text[:500]}")
+                return self._wait_decision(f"JSON parse error: {e}")
+
+        return TradeDecision(
+            action=data.get("action", "WAIT").upper(),
+            symbol=data.get("symbol"),
+            quantity=data.get("quantity"),
+            entry_price=data.get("entry_price"),
+            stop_loss=data.get("stop_loss"),
+            target_1=data.get("target_1"),
+            target_2=data.get("target_2"),
+            confidence=float(data.get("confidence", 0.0)),
+            rationale=data.get("rationale", ""),
+            key_risks=data.get("key_risks", []),
+            time_horizon=data.get("time_horizon", "intraday"),
+            setup_type=data.get("setup_type"),
+            raw_response=raw_text,
+        )
+
+    def _repair_truncated_json(self, text: str) -> str:
+        """Close an unterminated JSON string/object caused by token limit truncation."""
+        # Find last complete key-value pair by truncating to last comma or opening brace
+        t = text.rstrip()
+        # Close open string if needed
+        if t.count('"') % 2 != 0:
+            t += '"'
+        # Close open array if needed
+        open_arrays = t.count("[") - t.count("]")
+        t += "]" * max(0, open_arrays)
+        # Close open object
+        open_braces = t.count("{") - t.count("}")
+        t += "}" * max(0, open_braces)
+        return t
 
     def _wait_decision(self, reason: str) -> TradeDecision:
         return TradeDecision(
