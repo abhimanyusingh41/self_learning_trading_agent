@@ -289,11 +289,18 @@ For crypto trades: trade when confidence >= 0.55 and a clear technical setup exi
         return ""
 
     def _parse_decision(self, raw_text: str) -> TradeDecision:
-        # Strip markdown code fences if present
         text = raw_text.strip()
+        # Strip markdown code fences if present
         if text.startswith("```"):
             lines = text.split("\n")
             text = "\n".join(lines[1:-1]) if lines[-1].strip() == "```" else "\n".join(lines[1:])
+        # If still not JSON, try to extract a {...} block from within the response
+        if not text.startswith("{"):
+            import re
+            m = re.search(r"\{[\s\S]*\}", text)
+            if m:
+                text = m.group(0)
+                logger.warning("Brain response was not pure JSON — extracted embedded JSON block")
 
         try:
             data = json.loads(text)

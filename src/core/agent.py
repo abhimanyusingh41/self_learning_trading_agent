@@ -176,15 +176,20 @@ class TradingAgent:
                 logger.warning(f"Already have open crypto position in {symbol} — skipping duplicate entry")
                 return
 
-        # Risk check — skip for exit actions (SELL/COVER always allowed)
-        # Only apply risk limits to new entries (BUY/SHORT)
+        # SELL/COVER = close existing position, never open a new one
+        if decision.action in ("SELL", "COVER"):
+            closed = self._try_close_by_signal(symbol, decision, now_ist=None)
+            if closed:
+                return
+            # No matching open position found — treat as stale signal, ignore
+            logger.warning(f"SELL/COVER signal for {symbol} but no matching open position — ignoring")
+            return
+
+        # Risk check — only applies to new entries (BUY/SHORT)
         is_crypto_trade = symbol in self._crypto_symbols
         is_option_trade = self._is_option_symbol(symbol)
 
-        if decision.action in ("SELL", "COVER"):
-            pass  # exit trades always allowed through — no risk check needed
-
-        elif is_crypto_trade:
+        if is_crypto_trade:
             # For crypto use USDT balance and skip INR-based risk limits
             if hasattr(self.executor, "binance_paper"):
                 crypto_capital = self.executor.binance_paper.get_portfolio_value()
@@ -362,6 +367,57 @@ class TradingAgent:
         else:
             logger.error(f"Order failed: {result.message}")
 
+    def _try_close_by_signal(self, symbol: str, decision, now_ist) -> bool:
+        """Close an existing open position when brain signals SELL/COVER. Returns True if closed."""
+        is_crypto = symbol in self._crypto_symbols
+        is_mcx = self._is_mcx_symbol(symbol)
+
+        if is_crypto and hasattr(self.executor, "binance_paper"):
+            exec_target = self.executor.binance_paper
+        elif is_crypto and hasattr(self.executor, "binance_live"):
+            exec_target = self.executor.binance_live
+        elif is_mcx and hasattr(self.executor, "mcx_paper"):
+            exec_target = self.executor.mcx_paper
+        else:
+            exec_target = self.executor
+
+        open_trade = next(
+            (t for t in self.memory.get_open_trades() if t["symbol"] == symbol),
+            None,
+        )
+        if not open_trade:
+            return False
+
+        # Get current market price for the exit
+        is_option = self._is_option_symbol(symbol)
+        try:
+            if is_option:
+                current_price = self.analyzer.md.get_option_quote(symbol)
+            elif is_crypto and hasattr(self.executor, "binance_paper"):
+                current_price = self.executor.binance_paper.get_current_price(symbol)
+            elif is_mcx and hasattr(self.executor, "mcx_paper"):
+                current_price = self.executor.mcx_paper.get_current_price(symbol)
+            else:
+                current_price = self.executor.get_current_price(symbol)
+        except Exception:
+            current_price = decision.entry_price or float(open_trade.get("entry_price") or 0)
+
+        result = exec_target.close_position(
+            symbol=symbol,
+            quantity=float(open_trade["quantity"]),
+            current_price=current_price or float(open_trade.get("entry_price") or 0),
+            reason="brain_exit_signal",
+        )
+        if result.success:
+            self.reflector.reflect_and_learn(
+                trade_id=open_trade["trade_id"],
+                exit_price=result.price,
+                exit_reason="brain_exit_signal",
+                market_context_at_exit=self._last_market_context[:1000],
+            )
+            logger.info(f"Closed {symbol} on brain SELL signal @ {result.price}")
+        return result.success
+
     def _check_exit_conditions(self, now_ist: datetime, options_only: bool = False):
         """Check all open trades for SL/target hits or EOD close."""
         open_trades = self.memory.get_open_trades()
@@ -402,8 +458,8 @@ class TradingAgent:
             self.memory.update_trade_cmp(trade["trade_id"], current_price)
 
             action = trade["action"]
-            sl = float(trade.get("stop_loss", 0))
-            t1 = float(trade.get("target_1", 0))
+            sl = float(trade.get("stop_loss") or 0)
+            t1 = float(trade.get("target_1") or 0)
             should_close = False
             close_reason = ""
             exit_price = current_price  # default: current market price
