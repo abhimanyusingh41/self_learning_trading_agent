@@ -499,12 +499,13 @@ class TradingAgent:
                     pass
 
             # EOD auto-close ALL NSE/MCX positions — no overnight holds
-            # NSE/NFO: close at 15:15 (market closes 15:30)
-            # MCX: close at 23:15 (market closes 23:30)
+            # NSE/NFO: close any time at or after 15:15 (market closes 15:30)
+            # MCX: close any time at or after 23:15 (market closes 23:30)
             if not is_crypto:
                 is_mcx_trade = self._is_mcx_symbol(symbol)
                 eod_h, eod_m = (23, 15) if is_mcx_trade else (15, 15)
-                if now_ist.hour == eod_h and now_ist.minute >= eod_m:
+                past_eod = (now_ist.hour > eod_h) or (now_ist.hour == eod_h and now_ist.minute >= eod_m)
+                if past_eod:
                     should_close, close_reason = True, "eod_auto_close"
                     exit_price = current_price  # EOD always uses market price
 
