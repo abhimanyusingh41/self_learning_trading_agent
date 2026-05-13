@@ -140,7 +140,7 @@ class TradeDecision:
 
 
 class TradingBrain:
-    def __init__(self, model: str = "claude-opus-4-7", max_tokens: int = 8192):
+    def __init__(self, model: str = "claude-sonnet-4-6", max_tokens: int = 2000):
         self.client = anthropic.Anthropic()
         self.model = model
         self.max_tokens = max_tokens
@@ -232,9 +232,7 @@ LESSON_TAG: <short tag>"""
         try:
             response = self.client.messages.create(
                 model=self.model,
-                max_tokens=1024,
-                thinking={"type": "adaptive"},
-                output_config={"effort": "medium"},
+                max_tokens=512,
                 system=[
                     {
                         "type": "text",

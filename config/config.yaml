@@ -71,9 +71,12 @@ instruments:
     - AAVEUSDT
 
 agent:
-  model: claude-opus-4-7
-  max_tokens: 4000
-  analysis_interval_minutes: 20
+  model: claude-sonnet-4-6
+  max_tokens: 2000
+  analysis_interval_minutes: 10    # interval when hunting for a trade
+  in_trade_interval_minutes: 3     # interval when any position is open
+  enable_mcx: false                # paused — code intact, set true to re-enable
+  enable_crypto: false             # paused — code intact, set true to re-enable
   reflection_enabled: true
   memory_file: data/memory/trade_memory.json
 

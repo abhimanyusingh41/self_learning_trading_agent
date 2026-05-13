@@ -103,13 +103,17 @@ class TradingAgent:
         full_context = f"{session_note}\n\n{market_context}"
 
         # Skip brain call if every tradeable pool is already at max positions
+        agent_cfg = self.config.get("agent", {})
+        mcx_enabled = agent_cfg.get("enable_mcx", True)
+        crypto_enabled = agent_cfg.get("enable_crypto", True)
+
         max_pos = self.risk._max_positions
         nse_open = len(self.executor.get_open_positions())
         mcx_open = len(self.executor.mcx_paper.get_open_positions()) if hasattr(self.executor, "mcx_paper") else max_pos
         crypto_open_count = len(self.executor.binance_paper.get_open_positions()) if hasattr(self.executor, "binance_paper") else max_pos
         nse_full = not equity_open or nse_open >= max_pos
-        mcx_full = not commodity_open or mcx_open >= max_pos
-        crypto_full = crypto_open_count >= max_pos
+        mcx_full = not mcx_enabled or not commodity_open or mcx_open >= max_pos
+        crypto_full = not crypto_enabled or crypto_open_count >= max_pos
         if nse_full and mcx_full and crypto_full:
             logger.info("All tradeable pools at max positions — skipping brain call")
             return
@@ -145,6 +149,14 @@ class TradingAgent:
         # Validate: don't trade MCX when closed
         if not commodity_open and self._is_mcx_symbol(symbol):
             logger.warning(f"Brain picked MCX symbol {symbol} but MCX is closed — skipping")
+            return
+
+        # Reject MCX / crypto when paused via config
+        if not mcx_enabled and self._is_mcx_symbol(symbol):
+            logger.info(f"MCX trading paused — skipping {symbol}")
+            return
+        if not crypto_enabled and symbol in self._crypto_symbols:
+            logger.info(f"Crypto trading paused — skipping {symbol}")
             return
 
         # NSE trades MUST be option symbols (CE/PE) — reject raw stock symbols
@@ -774,19 +786,38 @@ class TradingAgent:
         """
         Two-speed loop:
           - Every 3 min: fast options SL/target check only
-          - Every 10 min: full cycle (brain analysis + all exit checks + new trades)
+          - Every `interval_minutes` (default 10): full brain cycle when no open positions
+          - Every `in_trade_interval_minutes` (default 3): full brain cycle when in a trade
+          - Sleeps from 15:30 IST to 09:00 IST next working day (NSE-only hours)
         """
+        agent_cfg = self.config.get("agent", {})
+        in_trade_mins = agent_cfg.get("in_trade_interval_minutes", 3)
+
         self._running = True
-        logger.info(f"Agent started — full cycle: {interval_minutes} min | options SL check: 3 min")
+        logger.info(
+            f"Agent started — hunt interval: {interval_minutes} min | "
+            f"in-trade interval: {in_trade_mins} min | SL check: 3 min"
+        )
         self._cleanup_orphaned_trades()
 
         OPTIONS_CHECK_SECS = 3 * 60
-        CRYPTO_ONLY_SECS = 30 * 60  # slower cadence when only crypto is open
         last_full_run = 0.0  # force immediate full run on startup
 
         while self._running:
             loop_start = time.time()
             now_ist = datetime.now(IST)
+
+            # Sleep from market close (15:30 IST) to next working day 09:00 IST
+            if self._is_market_closed_for_day(now_ist):
+                wake_time = self._next_market_open(now_ist)
+                sleep_secs = (wake_time - now_ist).total_seconds()
+                logger.info(
+                    f"Market closed. Sleeping until {wake_time.strftime('%Y-%m-%d %H:%M IST')} "
+                    f"({sleep_secs / 3600:.1f} h)"
+                )
+                self._interruptible_sleep(sleep_secs)
+                last_full_run = 0.0  # force immediate cycle on wake
+                continue
 
             # Fast options SL/target check — runs every 3 min
             try:
@@ -794,10 +825,9 @@ class TradingAgent:
             except Exception as e:
                 logger.error(f"Options exit check error: {e}", exc_info=True)
 
-            # Dynamic full-cycle interval: normal when NSE/MCX open, 30 min when crypto-only
-            equity_open_now = self._is_equity_session(now_ist)
-            commodity_open_now = self._is_commodity_session(now_ist)
-            effective_secs = interval_minutes * 60 if (equity_open_now or commodity_open_now) else CRYPTO_ONLY_SECS
+            # Adaptive full-cycle interval: faster when in a trade
+            has_open = len(self.executor.get_open_positions()) > 0
+            effective_secs = in_trade_mins * 60 if has_open else interval_minutes * 60
 
             # Full cycle
             if loop_start - last_full_run >= effective_secs:
@@ -810,6 +840,29 @@ class TradingAgent:
 
             elapsed = time.time() - loop_start
             time.sleep(max(0, OPTIONS_CHECK_SECS - elapsed))
+
+    def _is_market_closed_for_day(self, now_ist: datetime) -> bool:
+        """True after 15:30 IST on a weekday, or on weekends."""
+        if now_ist.weekday() >= 5:
+            return True
+        market_cfg = self.config.get("market", {})
+        close_t = market_cfg.get("equity_close", "15:30").split(":")
+        close_dt = now_ist.replace(hour=int(close_t[0]), minute=int(close_t[1]), second=0, microsecond=0)
+        return now_ist >= close_dt
+
+    def _next_market_open(self, now_ist: datetime) -> datetime:
+        """Returns 09:00 IST on the next working weekday (Mon–Fri)."""
+        from datetime import timedelta
+        candidate = now_ist.replace(hour=9, minute=0, second=0, microsecond=0) + timedelta(days=1)
+        while candidate.weekday() >= 5:
+            candidate += timedelta(days=1)
+        return candidate
+
+    def _interruptible_sleep(self, seconds: float):
+        """Sleep in 30-second chunks so stop() can interrupt cleanly."""
+        end = time.time() + seconds
+        while self._running and time.time() < end:
+            time.sleep(min(30, end - time.time()))
 
     def stop(self):
         self._running = False

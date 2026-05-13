@@ -44,15 +44,23 @@ class MarketAnalyzer:
         else:
             sections.append("### NSE STOCK OPTIONS (NFO)\nNSE market closed.")
 
-        # 3. Commodities (MCX) — only during MCX hours
-        if commodity_open:
+        # 3. Commodities (MCX) — only during MCX hours and when enabled
+        agent_cfg = self.config.get("agent", {})
+        mcx_enabled = agent_cfg.get("enable_mcx", True)
+        crypto_enabled = agent_cfg.get("enable_crypto", True)
+
+        if not mcx_enabled:
+            sections.append("### MCX COMMODITIES\nMCX trading paused.")
+        elif commodity_open:
             sections.append(self._commodities_section())
         else:
             sections.append("### MCX COMMODITIES\nMCX market closed.")
 
-        # 4. Crypto — always open
-        if self.bd and self.crypto:
+        # 4. Crypto — always open, when enabled
+        if crypto_enabled and self.bd and self.crypto:
             sections.append(self._crypto_section())
+        elif not crypto_enabled:
+            sections.append("### CRYPTO\nCrypto trading paused.")
 
         return "\n\n".join(sections)
 
@@ -221,7 +229,7 @@ class MarketAnalyzer:
                 pct = q.get("change_pct", 0)
                 vol = q.get("volume", 0)
 
-                df = self.bd.get_historical_data(symbol, interval=BINANCE_INTERVAL, limit=100)
+                df = self.bd.get_historical_data(symbol, interval=BINANCE_INTERVAL, limit=50)
                 if df.empty:
                     lines.append(f"\n{symbol}: ${price:,.4f} ({'+' if pct >= 0 else ''}{pct:.2f}%) — no indicator data")
                     continue

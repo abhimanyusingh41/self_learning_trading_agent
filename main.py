@@ -71,8 +71,8 @@ def build_agent(config: dict, mode: str):
 
     agent_cfg = config.get("agent", {})
     brain = TradingBrain(
-        model=agent_cfg.get("model", "claude-opus-4-7"),
-        max_tokens=agent_cfg.get("max_tokens", 8192),
+        model=agent_cfg.get("model", "claude-sonnet-4-6"),
+        max_tokens=agent_cfg.get("max_tokens", 2000),
     )
     memory = TradeMemory(agent_cfg.get("memory_file", "data/memory/trade_memory.json"))
     risk = RiskManager(config)
