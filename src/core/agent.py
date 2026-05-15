@@ -240,15 +240,19 @@ class TradingAgent:
 
             underlying = self._get_underlying_from_option(symbol)
             lot_size = self._get_lot_size(underlying)
-            num_lots = int(decision.quantity or 1)
             entry = decision.entry_price or 0
             sl = decision.stop_loss or 0
 
             risk_cfg = self.config.get("risk", {})
+            max_lots = int(risk_cfg.get("options_max_lots", 2))                    # Rule: max 2 lots
+            max_value = float(risk_cfg.get("options_max_trade_value", 30000))      # Rule: max ₹30k
             max_loss_pct = risk_cfg.get("options_per_trade_loss_pct", 3.0)
-            max_value_pct = risk_cfg.get("options_max_trade_value_pct", 15.0)
             max_risk = nse_capital * max_loss_pct / 100
-            max_value = nse_capital * max_value_pct / 100
+
+            # Hard cap on lots — override brain regardless
+            num_lots = min(int(decision.quantity or 1), max_lots)
+            if num_lots != int(decision.quantity or 1):
+                logger.info(f"Lots capped at {max_lots} (brain requested {int(decision.quantity or 1)})")
 
             # Try requested lots first; fall back to 1 lot before blocking
             approved_lots = None
@@ -267,11 +271,9 @@ class TradingAgent:
 
             if approved_lots is None:
                 one_unit_value = entry * lot_size
-                one_unit_risk = abs(entry - sl) * lot_size
                 logger.warning(
                     f"Risk check BLOCKED option trade {symbol}: "
-                    f"1 lot value ₹{one_unit_value:.0f} (limit ₹{max_value:.0f}) | "
-                    f"risk ₹{one_unit_risk:.0f} (limit ₹{max_risk:.0f})"
+                    f"1 lot ₹{one_unit_value:.0f} exceeds ₹{max_value:.0f} limit"
                 )
                 return
 
@@ -477,22 +479,46 @@ class TradingAgent:
             action = trade["action"]
             sl = float(trade.get("stop_loss") or 0)
             t1 = float(trade.get("target_1") or 0)
+            trail_active = bool(trade.get("trail_active", False))
+            trail_sl = float(trade.get("trail_sl") or 0)
             should_close = False
             close_reason = ""
             exit_price = current_price  # default: current market price
 
             if action == "BUY":
-                if sl and current_price <= sl:
-                    should_close, close_reason = True, "stop_loss_hit"
-                    # Simulate real SL-M order: exit at SL price unless a gap blew >20% through it
-                    if current_price >= sl * 0.80:
-                        exit_price = sl
-                    # else: gap scenario — exit at current (worse) price, realistic for crashes
-                elif t1 and current_price >= t1:
-                    should_close, close_reason = True, "target_1_hit"
-                    # Simulate real target order: exit at target price unless a gap ran >20% past it
-                    if current_price <= t1 * 1.20:
-                        exit_price = t1
+                if trail_active and trail_sl:
+                    # ── Trailing SL mode (activated after target was hit) ──────
+                    if current_price > trail_sl:
+                        # Price made a new high — ratchet SL up to current price (1:1 trailing)
+                        new_trail_sl = round(current_price, 2)
+                        self.memory.update_trail_sl(trade["trade_id"], new_trail_sl)
+                        # Also update the executor position so dashboard shows current TSL
+                        exec_target_for_update = self.executor
+                        if hasattr(self.executor, "mcx_paper") and is_mcx:
+                            exec_target_for_update = self.executor.mcx_paper
+                        if hasattr(exec_target_for_update, "update_position_sl"):
+                            exec_target_for_update.update_position_sl(symbol, new_trail_sl)
+                        logger.info(f"Trail SL ratcheted up: {symbol} ₹{trail_sl:.2f} → ₹{new_trail_sl:.2f}")
+                    elif current_price < trail_sl:
+                        # Price pulled back below trail SL — exit
+                        should_close, close_reason = True, "trailing_sl_hit"
+                        exit_price = current_price
+                        logger.info(f"Trailing SL hit: {symbol} price ₹{current_price:.2f} < TSL ₹{trail_sl:.2f}")
+                else:
+                    # ── Normal SL / target logic ──────────────────────────────
+                    if sl and current_price <= sl:
+                        should_close, close_reason = True, "stop_loss_hit"
+                        # Simulate real SL-M order: exit at SL price unless gap blew >20% through
+                        if current_price >= sl * 0.80:
+                            exit_price = sl
+                    elif t1 and current_price >= t1:
+                        # Target hit → activate trailing SL instead of closing
+                        logger.info(
+                            f"Target hit: {symbol} @ ₹{current_price:.2f} — "
+                            f"activating trailing SL at ₹{t1:.2f} (will trail 1:1 from here)"
+                        )
+                        self.memory.update_trail_sl(trade["trade_id"], t1)
+
             elif action == "SHORT":
                 if sl and current_price >= sl:
                     should_close, close_reason = True, "stop_loss_hit"
@@ -571,11 +597,17 @@ class TradingAgent:
                 lot_size = self._get_lot_size(underlying)
                 qty = pos.get("quantity", 0)
                 num_lots = qty // lot_size if lot_size else qty
+                # Show TSL label when trailing is active
+                open_trade = next((t for t in self.memory.get_open_trades() if t["symbol"] == symbol), {})
+                if open_trade.get("trail_active"):
+                    sl_label = f"TSL: ₹{open_trade.get('trail_sl', 0):.2f} (trailing)"
+                else:
+                    sl_label = f"SL: ₹{pos.get('stop_loss', 0):.2f}"
                 lines.append(
                     f"  {symbol} [OPTION/{underlying}]: {pos.get('action')} "
                     f"{num_lots} lot(s) ({qty} units) "
                     f"@ ₹{pos.get('entry_price', 0):.2f} premium | CMP: ₹{cur:.2f} | "
-                    f"SL: ₹{pos.get('stop_loss', 0):.2f}"
+                    f"{sl_label}"
                 )
             else:
                 cur = self.executor.get_current_price(symbol)

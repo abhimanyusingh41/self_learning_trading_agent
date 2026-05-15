@@ -39,6 +39,11 @@ class PaperTrader(BaseExecutor):
     def update_price(self, symbol: str, price: float):
         self._price_cache[symbol] = price
 
+    def update_position_sl(self, symbol: str, new_sl: float):
+        """Update stop loss on an open position (used by trailing SL logic)."""
+        if symbol in self.positions:
+            self.positions[symbol]["stop_loss"] = new_sl
+
     def place_order(
         self,
         symbol: str,

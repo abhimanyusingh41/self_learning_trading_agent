@@ -15,9 +15,10 @@ risk:
   daily_loss_limit_pct: 2.0
   per_trade_loss_pct: 0.5        # equity/commodity/crypto: % of capital at risk per trade
   options_per_trade_loss_pct: 3.0  # options: higher tolerance (premium × SL% × lot_size)
-  max_positions: 6
+  max_positions: 3               # max concurrent open trades across all pools
   max_trade_value_pct: 10.0
-  options_max_trade_value_pct: 15.0  # allow slightly larger option premium outlays
+  options_max_trade_value: 30000  # absolute INR cap per option trade (premium × lot_size × lots)
+  options_max_lots: 2            # hard cap on lots per option trade
   kill_switch: false
   # Separate capital pools — each segment trades its own allocation independently
   nse_capital: 50000        # INR for NSE options (NFO)
