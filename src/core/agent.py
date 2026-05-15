@@ -877,11 +877,19 @@ class TradingAgent:
             time.sleep(max(0, OPTIONS_CHECK_SECS - elapsed))
 
     def _is_market_closed_for_day(self, now_ist: datetime) -> bool:
-        """True after 15:30 IST on a weekday, or on weekends."""
+        """True only after BOTH NSE (15:30) and MCX (23:30) are closed, or on weekends.
+        MCX trades until 23:30 IST so sleeping at 15:30 would skip the MCX EOD auto-close.
+        When MCX is disabled we sleep at NSE close (15:30) instead."""
         if now_ist.weekday() >= 5:
             return True
         market_cfg = self.config.get("market", {})
-        close_t = market_cfg.get("equity_close", "15:30").split(":")
+        mcx_enabled = self.config.get("agent", {}).get("enable_mcx", True)
+        if mcx_enabled:
+            # Sleep only after MCX closes at 23:30 IST
+            close_t = market_cfg.get("commodity_close", "23:30").split(":")
+        else:
+            # MCX paused — sleep after NSE closes at 15:30 IST
+            close_t = market_cfg.get("equity_close", "15:30").split(":")
         close_dt = now_ist.replace(hour=int(close_t[0]), minute=int(close_t[1]), second=0, microsecond=0)
         return now_ist >= close_dt
 
