@@ -1,0 +1,24 @@
+[Unit]
+Description=Self-Learning Trading Agent — Dashboard
+Documentation=https://github.com/abhimanyusingh41/zerodha-trading-agent
+After=network-online.target self-learning-trading-agent.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__VM_USER__
+WorkingDirectory=/opt/self-learning-trading-agent
+
+EnvironmentFile=/opt/self-learning-trading-agent/.env
+Environment=PYTHONUNBUFFERED=1
+
+ExecStart=/usr/bin/python3 dashboard/main.py
+
+Restart=on-failure
+RestartSec=15
+
+StandardOutput=append:/opt/self-learning-trading-agent/logs/dashboard.log
+StandardError=append:/opt/self-learning-trading-agent/logs/dashboard.log
+
+[Install]
+WantedBy=multi-user.target

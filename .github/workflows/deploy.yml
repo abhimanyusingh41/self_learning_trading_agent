@@ -1,0 +1,53 @@
+name: Deploy to Azure VM
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy → self-learning-trading-agent
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Check VM is running
+        run: |
+          STATE=$(az vm get-instance-view \
+            -g "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            -n "${{ secrets.AZURE_VM_NAME }}" \
+            --query "instanceView.statuses[?starts_with(code,'PowerState/')].displayStatus" \
+            -o tsv)
+          echo "VM state: $STATE"
+          if [[ "$STATE" != *"running"* ]]; then
+            echo "VM is not running — aborting"
+            exit 1
+          fi
+
+      - name: Deploy code and restart services
+        run: |
+          az vm run-command invoke \
+            -g "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            -n "${{ secrets.AZURE_VM_NAME }}" \
+            --command-id RunShellScript \
+            --scripts \
+              "set -e" \
+              "D=/opt/self-learning-trading-agent" \
+              "echo '=== Deploy started: '$(date '+%Y-%m-%d %H:%M:%S')' ==='" \
+              "[ -d \$D/logs ] && cp -r \$D/logs /tmp/sla-logs-bak 2>/dev/null || true" \
+              "cd \$D && git remote set-url origin 'https://${{ secrets.GH_PAT }}@github.com/abhimanyusingh41/zerodha-trading-agent.git'" \
+              "git fetch origin main --quiet && git reset --hard origin/main" \
+              "echo 'Commit: '$(git log -1 --oneline)" \
+              "[ -d /tmp/sla-logs-bak ] && cp -r /tmp/sla-logs-bak/. \$D/logs && rm -rf /tmp/sla-logs-bak || true" \
+              "mkdir -p \$D/logs" \
+              "pip3 install -r \$D/requirements.txt --quiet" \
+              "systemctl restart self-learning-trading-agent self-learning-trading-dashboard" \
+              "sleep 3 && systemctl status self-learning-trading-agent --no-pager -l" \
+              "echo '=== Deploy complete ==='" \
+            --query "value[0].message" \
+            --output tsv

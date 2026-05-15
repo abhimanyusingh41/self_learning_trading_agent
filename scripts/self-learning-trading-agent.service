@@ -1,0 +1,29 @@
+[Unit]
+Description=Self-Learning NSE Trading Agent
+Documentation=https://github.com/abhimanyusingh41/zerodha-trading-agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__VM_USER__
+WorkingDirectory=/opt/self-learning-trading-agent
+
+# Secrets stay on VM — never in git
+EnvironmentFile=/opt/self-learning-trading-agent/.env
+Environment=PYTHONUNBUFFERED=1
+
+ExecStart=/usr/bin/python3 main.py
+
+# Restart on failure with a 30s cooldown
+# Stop permanently after 5 crashes within 10 minutes
+Restart=on-failure
+RestartSec=30
+StartLimitIntervalSec=600
+StartLimitBurst=5
+
+StandardOutput=append:/opt/self-learning-trading-agent/logs/agent.log
+StandardError=append:/opt/self-learning-trading-agent/logs/agent.log
+
+[Install]
+WantedBy=multi-user.target
