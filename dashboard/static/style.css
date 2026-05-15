@@ -204,6 +204,21 @@ tr.loss { border-left: 3px solid var(--red); }
   white-space: nowrap; display: inline-block;
 }
 
+/* ── Lessons pagination ── */
+.lessons-pagination {
+  display: flex; align-items: center; justify-content: center;
+  gap: 12px; padding: 10px 12px;
+  border-top: 1px solid var(--border);
+}
+.pg-btn {
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--text); font-size: 12px; padding: 4px 14px;
+  border-radius: 6px; cursor: pointer; transition: background 0.15s;
+}
+.pg-btn:hover:not(:disabled) { background: rgba(88,166,255,0.1); border-color: var(--accent); }
+.pg-btn:disabled { opacity: 0.35; cursor: default; }
+.pg-info { color: var(--muted); font-size: 12px; min-width: 80px; text-align: center; }
+
 /* ── Lesson modal ── */
 .lesson-modal {
   position: fixed; inset: 0; z-index: 200;

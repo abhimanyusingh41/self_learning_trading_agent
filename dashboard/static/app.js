@@ -183,36 +183,56 @@ async function loadTrades() {
 
 // ── Lessons ───────────────────────────────────────────────
 let _lessons = [];
+let _lessonsPage = 0;
+const LESSONS_PER_PAGE = 10;
+
+function renderLessons() {
+  const container = document.getElementById("lessons-list");
+  if (!_lessons.length) {
+    container.innerHTML = '<div class="empty">No lessons yet — agent learns after each closed trade</div>';
+    return;
+  }
+  const totalPages = Math.ceil(_lessons.length / LESSONS_PER_PAGE);
+  const start = _lessonsPage * LESSONS_PER_PAGE;
+  const pageItems = _lessons.slice(start, start + LESSONS_PER_PAGE);
+
+  container.innerHTML = `
+    <table class="lessons-tbl">
+      <thead>
+        <tr>
+          <th style="width:36px">#</th>
+          <th>Tag</th>
+          <th style="width:160px">Date</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${pageItems.map((l, i) => `
+          <tr class="lesson-row" onclick="openLessonModal(${start + i})">
+            <td class="lesson-num">${_lessons.length - (start + i)}</td>
+            <td><span class="lesson-tag">${escHtml(l.tag || "general")}</span></td>
+            <td class="lesson-date">${toIST(l.timestamp)}</td>
+          </tr>`).join("")}
+      </tbody>
+    </table>
+    <div class="lessons-pagination">
+      <button class="pg-btn" onclick="changeLessonsPage(-1)" ${_lessonsPage === 0 ? "disabled" : ""}>&#8592; Prev</button>
+      <span class="pg-info">Page ${_lessonsPage + 1} / ${totalPages}</span>
+      <button class="pg-btn" onclick="changeLessonsPage(1)" ${_lessonsPage >= totalPages - 1 ? "disabled" : ""}>Next &#8594;</button>
+    </div>`;
+}
+
+function changeLessonsPage(delta) {
+  const totalPages = Math.ceil(_lessons.length / LESSONS_PER_PAGE);
+  _lessonsPage = Math.max(0, Math.min(_lessonsPage + delta, totalPages - 1));
+  renderLessons();
+}
 
 async function loadLessons() {
   try {
-    const r = await fetch("/api/lessons?limit=50");
+    const r = await fetch("/api/lessons?limit=200");
     _lessons = await r.json();
-    const container = document.getElementById("lessons-list");
-
-    if (!_lessons.length) {
-      container.innerHTML = '<div class="empty">No lessons yet — agent learns after each closed trade</div>';
-      return;
-    }
-
-    container.innerHTML = `
-      <table class="lessons-tbl">
-        <thead>
-          <tr>
-            <th style="width:36px">#</th>
-            <th>Tag</th>
-            <th>Date</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${_lessons.map((l, i) => `
-            <tr class="lesson-row" onclick="openLessonModal(${i})">
-              <td class="lesson-num">${_lessons.length - i}</td>
-              <td><span class="lesson-tag">${escHtml(l.tag || "general")}</span></td>
-              <td class="lesson-date">${toIST(l.timestamp)}</td>
-            </tr>`).join("")}
-        </tbody>
-      </table>`;
+    _lessonsPage = 0;
+    renderLessons();
   } catch (e) {
     console.error("Lessons load error:", e);
   }
