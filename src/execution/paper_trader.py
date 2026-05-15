@@ -39,6 +39,11 @@ class PaperTrader(BaseExecutor):
     def update_price(self, symbol: str, price: float):
         self._price_cache[symbol] = price
 
+    def update_position_sl(self, symbol: str, new_sl: float):
+        """Update stop loss on an open position (used by trailing SL logic)."""
+        if symbol in self.positions:
+            self.positions[symbol]["stop_loss"] = new_sl
+
     def place_order(
         self,
         symbol: str,
@@ -49,11 +54,17 @@ class PaperTrader(BaseExecutor):
         target: float,
         exchange: str = "NSE",
     ) -> OrderResult:
-        # Apply slippage
+        # Use live market price at execution time for accuracy; fall back to brain's price
+        live_price = self.get_current_price(symbol, exchange)
+        base_price = live_price if live_price > 0 else price
+        if base_price != price:
+            logger.debug(f"Using live price ₹{base_price:.2f} instead of brain price ₹{price:.2f} for {symbol}")
+
+        # Apply slippage on top of live price
         if action in ("BUY", "COVER"):
-            exec_price = price * (1 + SLIPPAGE_PCT)
+            exec_price = base_price * (1 + SLIPPAGE_PCT)
         else:
-            exec_price = price * (1 - SLIPPAGE_PCT)
+            exec_price = base_price * (1 - SLIPPAGE_PCT)
 
         trade_value = exec_price * quantity
 

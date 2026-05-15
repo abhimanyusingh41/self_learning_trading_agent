@@ -143,6 +143,15 @@ class TradeMemory:
                 self._save()
                 return
 
+    def update_trail_sl(self, trade_id: str, trail_sl: float):
+        """Activate or update trailing SL for an open trade."""
+        for trade in self._data["trades"]:
+            if trade["trade_id"] == trade_id and trade.get("status") == "open":
+                trade["trail_active"] = True
+                trade["trail_sl"] = round(trail_sl, 2)
+                self._save()
+                return
+
     def get_open_trades(self) -> list:
         return [t for t in self._data["trades"] if t.get("status") == "open"]
 

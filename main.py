@@ -111,12 +111,14 @@ def build_agent(config: dict, mode: str):
             crypto_usdt = risk_cfg.get("crypto_capital_usdt", 500)
 
             # NSE options executor (₹50K)
+            # Price feed routes NFO option symbols (CE/PE) to the correct exchange
+            def nse_price_feed(sym: str) -> float:
+                if sym.endswith("CE") or sym.endswith("PE"):
+                    return market_data.get_option_quote(sym)
+                return market_data.get_quote([sym], "NSE").get(f"NSE:{sym}", {}).get("last_price", 0.0)
+
             executor = PaperTrader(initial_capital=nse_capital)
-            executor.set_price_feed(
-                lambda sym: market_data.get_quote([sym], "NSE")
-                .get(f"NSE:{sym}", {})
-                .get("last_price", 0.0)
-            )
+            executor.set_price_feed(nse_price_feed)
 
             # MCX commodities executor (₹50K) with MCX price feed
             mcx_trader = PaperTrader(initial_capital=mcx_capital)
