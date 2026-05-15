@@ -27,110 +27,58 @@ risk:
 
 instruments:
   # All Nifty 50 stocks for option trading (actual trades go to NFO segment)
-  # lot_size here is for market context display only — actual trade sizing
-  # fetches live lot_size from Kite at signal time via get_option_lot_size()
-  # Values marked ~estimate~ should be verified on your broker platform
+  # No lot_size here — fetched live from Kite at both display and trade time
   option_underlyings:
-    - symbol: RELIANCE
-      lot_size: 500
-    - symbol: TCS
-      lot_size: 175
-    - symbol: HDFCBANK
-      lot_size: 550
-    - symbol: INFY
-      lot_size: 400
-    - symbol: ICICIBANK
-      lot_size: 700
-    - symbol: SBIN
-      lot_size: 750
-    - symbol: BHARTIARTL
-      lot_size: 475
-    - symbol: BAJFINANCE
-      lot_size: 750
-    - symbol: KOTAKBANK
-      lot_size: 2000
-    - symbol: AXISBANK
-      lot_size: 625
-    - symbol: LT
-      lot_size: 175
-    - symbol: HCLTECH
-      lot_size: 350
-    - symbol: WIPRO
-      lot_size: 3000
-    - symbol: MARUTI
-      lot_size: 50
-    - symbol: SUNPHARMA
-      lot_size: 350       # ~estimate~
-    - symbol: TITAN
-      lot_size: 175       # ~estimate~
-    - symbol: ULTRACEMCO
-      lot_size: 50        # ~estimate~
-    - symbol: TATAMOTORS
-      lot_size: 900       # ~estimate~
-    - symbol: TATASTEEL
-      lot_size: 2750
-    - symbol: TATACONSUM
-      lot_size: 550
-    - symbol: JSWSTEEL
-      lot_size: 675
-    - symbol: ADANIENT
-      lot_size: 309
-    - symbol: ADANIPORTS
-      lot_size: 475
-    - symbol: BAJAJFINSV
-      lot_size: 250
-    - symbol: BAJAJ-AUTO
-      lot_size: 75
-    - symbol: HEROMOTOCO
-      lot_size: 150
-    - symbol: EICHERMOT
-      lot_size: 100
-    - symbol: M&M
-      lot_size: 200
-    - symbol: CIPLA
-      lot_size: 375
-    - symbol: DIVISLAB
-      lot_size: 100
-    - symbol: DRREDDY
-      lot_size: 125
-    - symbol: APOLLOHOSP
-      lot_size: 125
-    - symbol: ASIANPAINT
-      lot_size: 250
-    - symbol: BRITANNIA
-      lot_size: 125
-    - symbol: NESTLEIND
-      lot_size: 500
-    - symbol: HINDUNILVR
-      lot_size: 300
-    - symbol: ITC
-      lot_size: 1600
-    - symbol: ONGC
-      lot_size: 2250
-    - symbol: COALINDIA
-      lot_size: 1350
-    - symbol: BPCL
-      lot_size: 1975
-    - symbol: NTPC
-      lot_size: 1500
-    - symbol: POWERGRID
-      lot_size: 1900
-    - symbol: GRASIM
-      lot_size: 250
-    - symbol: INDUSINDBK
-      lot_size: 700
-    - symbol: HDFCLIFE
-      lot_size: 1100
-    - symbol: SBILIFE
-      lot_size: 750       # ~estimate~
-    - symbol: SHRIRAMFIN
-      lot_size: 1000      # ~estimate~
-    - symbol: TECHM
-      lot_size: 400       # ~estimate~
-    - symbol: TRENT
-      lot_size: 125       # ~estimate~
-    - symbol: BEL
-      lot_size: 1425
+    - RELIANCE
+    - TCS
+    - HDFCBANK
+    - INFY
+    - ICICIBANK
+    - SBIN
+    - BHARTIARTL
+    - BAJFINANCE
+    - KOTAKBANK
+    - AXISBANK
+    - LT
+    - HCLTECH
+    - WIPRO
+    - MARUTI
+    - SUNPHARMA
+    - TITAN
+    - ULTRACEMCO
+    - TATAMOTORS
+    - TATASTEEL
+    - TATACONSUM
+    - JSWSTEEL
+    - ADANIENT
+    - ADANIPORTS
+    - BAJAJFINSV
+    - BAJAJ-AUTO
+    - HEROMOTOCO
+    - EICHERMOT
+    - M&M
+    - CIPLA
+    - DIVISLAB
+    - DRREDDY
+    - APOLLOHOSP
+    - ASIANPAINT
+    - BRITANNIA
+    - NESTLEIND
+    - HINDUNILVR
+    - ITC
+    - ONGC
+    - COALINDIA
+    - BPCL
+    - NTPC
+    - POWERGRID
+    - GRASIM
+    - INDUSINDBK
+    - HDFCLIFE
+    - SBILIFE
+    - SHRIRAMFIN
+    - TECHM
+    - TRENT
+    - BEL
   exchange: NSE
   options_exchange: NFO
 

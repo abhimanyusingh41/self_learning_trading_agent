@@ -19,7 +19,7 @@ class MarketAnalyzer:
         self.bd = binance_data  # BinanceData instance, optional
         self.config = config
         self.instruments = config.get("instruments", {})
-        self.option_underlyings = self.instruments.get("option_underlyings", [])  # list of {symbol, lot_size}
+        self.option_underlyings = self.instruments.get("option_underlyings", [])  # list of symbols (strings)
         self.commodities = self.instruments.get("commodities", [])
         self.crypto = self.instruments.get("crypto", [])
         self.exchange = self.instruments.get("exchange", "NSE")
@@ -92,10 +92,10 @@ class MarketAnalyzer:
         lines = ["### NSE STOCK OPTIONS (NFO) — BUY ONLY"]
 
         for entry in self.option_underlyings:
-            symbol = entry.get("symbol", "")
-            lot_size = entry.get("lot_size", 1)
+            symbol = entry if isinstance(entry, str) else entry.get("symbol", "")
             if not symbol:
                 continue
+            lot_size = self.md.get_underlying_lot_size(symbol)
 
             try:
                 snap = self.md.get_option_chain_snapshot(symbol, num_strikes=2, lot_size=lot_size)

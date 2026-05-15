@@ -352,7 +352,7 @@ class MarketData:
             return 0.0
 
     def get_option_lot_size(self, tradingsymbol: str) -> int:
-        """Fetch lot_size for an option tradingsymbol live from Kite at trade time (no cache)."""
+        """Fetch lot_size for a specific option tradingsymbol live from Kite at trade time (no cache)."""
         try:
             instruments = self.kite.instruments("NFO")
             for inst in instruments:
@@ -366,6 +366,21 @@ class MarketData:
         except Exception as e:
             logger.error(f"Failed to fetch lot size for {tradingsymbol}: {e}")
             return 0
+
+    def get_underlying_lot_size(self, symbol: str) -> int:
+        """Get lot_size for an underlying symbol (e.g. 'RELIANCE') from the daily NFO cache."""
+        try:
+            instruments = self._get_nfo_instruments()
+            for inst in instruments:
+                if inst.get("name") == symbol and inst.get("instrument_type") in ("CE", "PE"):
+                    lot_size = inst.get("lot_size", 0)
+                    if lot_size:
+                        return lot_size
+            logger.warning(f"Lot size not found for underlying {symbol}")
+            return 1
+        except Exception as e:
+            logger.error(f"Failed to get lot size for underlying {symbol}: {e}")
+            return 1
 
     def _get_instrument_token(self, symbol: str, exchange: str) -> Optional[int]:
         # For MCX base names, auto-resolve to active contract first

@@ -698,12 +698,8 @@ class TradingAgent:
         return symbol.endswith("CE") or symbol.endswith("PE")
 
     def _get_lot_size(self, underlying_symbol: str) -> int:
-        """Look up lot_size for an underlying from config's option_underlyings list."""
-        underlyings = self.config.get("instruments", {}).get("option_underlyings", [])
-        for entry in underlyings:
-            if entry.get("symbol") == underlying_symbol:
-                return entry.get("lot_size", 1)
-        return 1
+        """Get lot_size for an underlying from Kite's daily NFO instruments cache."""
+        return self.analyzer.md.get_underlying_lot_size(underlying_symbol)
 
     def _get_underlying_from_option(self, option_symbol: str) -> str:
         """
@@ -714,7 +710,7 @@ class TradingAgent:
         underlyings = self.config.get("instruments", {}).get("option_underlyings", [])
         # Sort by length descending so longer names match first (e.g. BHARTIARTL before BHARTI)
         sorted_underlyings = sorted(
-            [e.get("symbol", "") for e in underlyings],
+            [e if isinstance(e, str) else e.get("symbol", "") for e in underlyings],
             key=len,
             reverse=True,
         )
