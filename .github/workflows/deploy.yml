@@ -47,6 +47,7 @@ jobs:
               "[ -d /tmp/sla-logs-bak ] && cp -r /tmp/sla-logs-bak/. \$D/logs && rm -rf /tmp/sla-logs-bak || true" \
               "mkdir -p \$D/logs" \
               "pip3 install -r \$D/requirements.txt --quiet" \
+              "pip3 install -r \$D/dashboard/requirements.txt --quiet" \
               "systemctl restart self-learning-trading-agent self-learning-trading-dashboard" \
               "sleep 3 && systemctl status self-learning-trading-agent --no-pager -l" \
               "echo '=== Deploy complete ==='" \
