@@ -27,7 +27,7 @@ if [ -z "$GH_PAT" ]; then
 fi
 
 DEPLOY_DIR="/opt/self-learning-trading-agent"
-REPO_URL="https://${GH_PAT}@github.com/abhimanyusingh41/zerodha-trading-agent.git"
+REPO_URL="https://${GH_PAT}@github.com/abhimanyusingh41/self_learning_trading_agent.git"
 SERVICE_AGENT="self-learning-trading-agent"
 SERVICE_DASH="self-learning-trading-dashboard"
 OLD_SERVICE_AGENT="trading-agent"
