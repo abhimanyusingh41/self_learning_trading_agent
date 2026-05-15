@@ -28,7 +28,7 @@ instruments:
   # Underlying stocks for option trading (actual trades go to NFO segment)
   option_underlyings:
     - symbol: RELIANCE
-      lot_size: 250
+      lot_size: 500
     - symbol: TCS
       lot_size: 175
     - symbol: HDFCBANK
@@ -38,13 +38,13 @@ instruments:
     - symbol: ICICIBANK
       lot_size: 700
     - symbol: SBIN
-      lot_size: 1500
+      lot_size: 750
     - symbol: BHARTIARTL
-      lot_size: 1850
+      lot_size: 475
     - symbol: BAJFINANCE
-      lot_size: 125
+      lot_size: 750
     - symbol: KOTAKBANK
-      lot_size: 400
+      lot_size: 2000
     - symbol: AXISBANK
       lot_size: 625
   exchange: NSE

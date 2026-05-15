@@ -331,8 +331,13 @@ class TradingAgent:
         order_exchange = "MCX" if is_mcx else "NSE"
 
         if is_option:
-            underlying = self._get_underlying_from_option(decision.symbol or "")
-            lot_size = self._get_lot_size(underlying)
+            # Fetch lot size live from Kite at signal time — not from config
+            lot_size = self.analyzer.md.get_option_lot_size(decision.symbol or "")
+            if not lot_size:
+                # Fallback to config if Kite call fails
+                underlying = self._get_underlying_from_option(decision.symbol or "")
+                lot_size = self._get_lot_size(underlying)
+                logger.warning(f"Using config lot_size fallback for {decision.symbol}: {lot_size}")
             actual_quantity = int((decision.quantity or 1) * lot_size)
             order_exchange = "NFO"
             logger.info(
