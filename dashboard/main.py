@@ -155,7 +155,7 @@ async def trades(
 
 
 @app.get("/api/lessons")
-async def lessons(limit: int = Query(20, le=100), _=Depends(require_auth)):
+async def lessons(limit: int = Query(20, le=200), _=Depends(require_auth)):
     data = load_memory()
     all_lessons = data.get("lessons", [])
     return list(reversed(all_lessons[-limit:]))
