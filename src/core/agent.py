@@ -642,6 +642,8 @@ class TradingAgent:
 
     def _refresh_crypto_prices(self):
         """Push latest Binance prices into BinancePaperTrader cache for SL/target checks."""
+        if not self.config.get("agent", {}).get("enable_crypto", True):
+            return
         if not (self.analyzer.bd and hasattr(self.executor, "binance_paper")):
             return
         try:
