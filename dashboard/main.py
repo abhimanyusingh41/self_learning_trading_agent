@@ -186,3 +186,9 @@ async def health(_=Depends(require_auth)):
         "log_file": log_ok,
         "timestamp": datetime.now(IST).isoformat(),
     }
+
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("DASHBOARD_PORT", "8080"))
+    uvicorn.run(app, host="0.0.0.0", port=port)
