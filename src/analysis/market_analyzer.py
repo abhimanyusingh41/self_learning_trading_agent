@@ -98,7 +98,7 @@ class MarketAnalyzer:
             lot_size = self.md.get_underlying_lot_size(symbol)
 
             try:
-                snap = self.md.get_option_chain_snapshot(symbol, num_strikes=2, lot_size=lot_size)
+                snap = self.md.get_option_chain_snapshot(symbol, num_strikes=1, lot_size=lot_size)
             except Exception as e:
                 logger.error(f"Option chain error for {symbol}: {e}")
                 snap = {"symbol": symbol, "error": str(e)}
@@ -167,28 +167,8 @@ class MarketAnalyzer:
             )
             lines.append(f"  PCR: {pcr} — {pcr_signal}")
 
-            # Chain table header
-            lines.append(f"  {'Strike':>8} | {'CE Symbol':<24} {'CE Prem':>8} {'CE OI':>10} | {'PE Symbol':<24} {'PE Prem':>8} {'PE OI':>10}")
-            lines.append(f"  {'-'*8}-+-{'-'*24}-{'-'*8}-{'-'*10}-+-{'-'*24}-{'-'*8}-{'-'*10}")
-
-            # Group chain by strike
-            strikes_in_chain = sorted(set(v["strike"] for v in chain.values()))
-            for strike in strikes_in_chain:
-                ce_entry = next(({"ts": ts, **v} for ts, v in chain.items() if v["strike"] == strike and v["type"] == "CE"), None)
-                pe_entry = next(({"ts": ts, **v} for ts, v in chain.items() if v["strike"] == strike and v["type"] == "PE"), None)
-                ce_ts = ce_entry["ts"] if ce_entry else ""
-                ce_p = f"₹{ce_entry['premium']:.2f}" if ce_entry else "-"
-                ce_oi = f"{ce_entry['oi']:,}" if ce_entry else "-"
-                pe_ts = pe_entry["ts"] if pe_entry else ""
-                pe_p = f"₹{pe_entry['premium']:.2f}" if pe_entry else "-"
-                pe_oi = f"{pe_entry['oi']:,}" if pe_entry else "-"
-                atm_marker = " <<ATM" if strike == atm else ""
-                lines.append(
-                    f"  {strike:>8} | {ce_ts:<24} {ce_p:>8} {ce_oi:>10} | {pe_ts:<24} {pe_p:>8} {pe_oi:>10}{atm_marker}"
-                )
-
-            # Tradable options list for brain to copy
-            lines.append(f"  TRADABLE OPTIONS (copy exact symbol):")
+            # Tradable options (exact symbols for brain to use — no duplicate table)
+            lines.append(f"  OPTIONS (symbol | type | premium | OI):")
             for ts, v in sorted(chain.items()):
                 direction = "CALL (BUY if bullish)" if v["type"] == "CE" else "PUT (BUY if bearish)"
                 lines.append(f"    {ts} — {direction} | Premium: ₹{v['premium']:.2f} | OI: {v['oi']:,}")
