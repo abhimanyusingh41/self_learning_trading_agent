@@ -43,6 +43,7 @@ jobs:
               "[ -d \$D/logs ] && cp -r \$D/logs /tmp/sla-logs-bak 2>/dev/null || true" \
               "cd \$D && git remote set-url origin 'https://${{ secrets.GH_PAT }}@github.com/abhimanyusingh41/self_learning_trading_agent.git'" \
               "git fetch origin main --quiet && git reset --hard origin/main" \
+              "chown -R azureuser:azureuser \$D/.git" \
               "echo 'Commit: '$(git log -1 --oneline)" \
               "[ -d /tmp/sla-logs-bak ] && cp -r /tmp/sla-logs-bak/. \$D/logs && rm -rf /tmp/sla-logs-bak || true" \
               "mkdir -p \$D/logs" \
