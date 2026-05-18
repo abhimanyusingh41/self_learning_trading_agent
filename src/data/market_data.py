@@ -16,6 +16,8 @@ KITE_MAX_RETRIES = 2
 # Module-level NFO instruments cache — persists across MarketData instances, refreshed daily
 _NFO_INSTRUMENTS_CACHE: list = []
 _NFO_INSTRUMENTS_DATE: Optional[date] = None
+_NFO_INSTRUMENTS_LAST_ATTEMPT: Optional[float] = None  # epoch seconds
+_NFO_INSTRUMENTS_RETRY_COOLDOWN = 60  # seconds between retries on failure
 
 
 class MarketData:
@@ -176,11 +178,19 @@ class MarketData:
         return result
 
     def _get_nfo_instruments(self) -> list:
-        """Return NFO instruments list, refreshing the module-level cache once per day."""
-        global _NFO_INSTRUMENTS_CACHE, _NFO_INSTRUMENTS_DATE
+        """Return NFO instruments list, refreshing the module-level cache once per day.
+        On rate-limit failure, waits 60s before retrying to avoid hammering the API."""
+        global _NFO_INSTRUMENTS_CACHE, _NFO_INSTRUMENTS_DATE, _NFO_INSTRUMENTS_LAST_ATTEMPT
+        import time as _time
         today = date.today()
         if _NFO_INSTRUMENTS_DATE == today and _NFO_INSTRUMENTS_CACHE:
             return _NFO_INSTRUMENTS_CACHE
+        # Cooldown — don't retry within 60s of last failed attempt
+        now = _time.monotonic()
+        if (_NFO_INSTRUMENTS_LAST_ATTEMPT is not None and
+                now - _NFO_INSTRUMENTS_LAST_ATTEMPT < _NFO_INSTRUMENTS_RETRY_COOLDOWN):
+            return _NFO_INSTRUMENTS_CACHE
+        _NFO_INSTRUMENTS_LAST_ATTEMPT = now
         try:
             instruments = self.kite.instruments("NFO")
             _NFO_INSTRUMENTS_CACHE = instruments

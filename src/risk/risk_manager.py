@@ -19,7 +19,7 @@ class RiskManager:
         self._per_trade_loss_pct = float(r.get("per_trade_loss_pct", 0.5))
         self._max_positions = int(r.get("max_positions", 3))
         self._max_trade_value_pct = float(r.get("max_trade_value_pct", 10.0))
-        self._initial_capital = float(r.get("initial_capital", 100000))
+        self._initial_capital = float(r.get("initial_capital", r.get("nse_capital", 50000)))
         self._kill_switch = bool(r.get("kill_switch", False))
 
     def check_trade(
