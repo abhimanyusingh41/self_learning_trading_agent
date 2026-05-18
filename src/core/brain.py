@@ -163,8 +163,6 @@ class TradingBrain:
                 response = self.client.messages.create(
                     model=self.model,
                     max_tokens=self.max_tokens,
-                    thinking={"type": "adaptive"},
-                    output_config={"effort": "high"},
                     system=[
                         {
                             "type": "text",
