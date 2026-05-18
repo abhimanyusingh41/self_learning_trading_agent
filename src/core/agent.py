@@ -79,23 +79,54 @@ class TradingAgent:
             logger.warning(f"Trading halted: {reason}")
             return
 
-        # When in a trade, only scan held underlyings + broad market (not all 50 stocks)
+        # ── Determine which pools can still take new trades ─────────────────
+        agent_cfg = self.config.get("agent", {})
+        mcx_enabled = agent_cfg.get("enable_mcx", True)
+        crypto_enabled = agent_cfg.get("enable_crypto", True)
+
         open_positions = self.executor.get_open_positions()
+        max_pos = self.risk._max_positions
+        nse_open = len(open_positions)
+        mcx_open = len(self.executor.mcx_paper.get_open_positions()) if hasattr(self.executor, "mcx_paper") else max_pos
+        crypto_open_count = len(self.executor.binance_paper.get_open_positions()) if hasattr(self.executor, "binance_paper") else max_pos
+
+        nse_full = not equity_open or nse_open >= max_pos
+        mcx_full = not mcx_enabled or not commodity_open or mcx_open >= max_pos
+        crypto_full = not crypto_enabled or crypto_open_count >= max_pos
+
+        # If ALL pools are full — no brain call, only Python SL/target loop runs
+        if nse_full and mcx_full and crypto_full:
+            logger.info("All tradeable pools at max positions — skipping brain call and market fetch")
+            return
+
+        # ── Build market context — skip sections for full pools ───────────
+        # When NSE is full, don't fetch 50-stock option chains (saves Kite calls + tokens)
+        # When in a trade, only scan held underlyings instead of all 50
         held_underlyings = None
-        if open_positions:
+        if open_positions and not nse_full:
             held_underlyings = {
                 self._get_underlying_from_option(p["symbol"])
                 for p in open_positions
                 if self._is_option_symbol(p.get("symbol", ""))
-            }
+            } or None
 
-        # Build market context (includes only open markets)
-        logger.info(
-            f"Building market context | NSE={'open' if equity_open else 'closed'} | "
-            f"MCX={'open' if commodity_open else 'closed'} | Crypto=open"
-            + (f" | in-trade scan: {held_underlyings}" if held_underlyings else "")
+        pool_status = []
+        if nse_full: pool_status.append("NSE=FULL(skip)")
+        elif equity_open: pool_status.append("NSE=scanning")
+        if mcx_full: pool_status.append("MCX=FULL(skip)")
+        elif commodity_open and mcx_enabled: pool_status.append("MCX=scanning")
+        if crypto_full: pool_status.append("Crypto=FULL(skip)")
+        elif crypto_enabled: pool_status.append("Crypto=scanning")
+
+        logger.info(f"Building market context | {' | '.join(pool_status)}"
+                    + (f" | focused: {held_underlyings}" if held_underlyings else ""))
+
+        market_context = self.analyzer.build_market_context(
+            focus_underlyings=held_underlyings,
+            include_nse=not nse_full,
+            include_mcx=not mcx_full,
+            include_crypto=not crypto_full,
         )
-        market_context = self.analyzer.build_market_context(focus_underlyings=held_underlyings)
         self._last_market_context = market_context
 
         # Portfolio state
@@ -112,22 +143,6 @@ class TradingAgent:
         # Add session context so brain knows what it can trade
         session_note = self._session_note(equity_open, commodity_open)
         full_context = f"{session_note}\n\n{market_context}"
-
-        # Skip brain call if every tradeable pool is already at max positions
-        agent_cfg = self.config.get("agent", {})
-        mcx_enabled = agent_cfg.get("enable_mcx", True)
-        crypto_enabled = agent_cfg.get("enable_crypto", True)
-
-        max_pos = self.risk._max_positions
-        nse_open = len(open_positions)
-        mcx_open = len(self.executor.mcx_paper.get_open_positions()) if hasattr(self.executor, "mcx_paper") else max_pos
-        crypto_open_count = len(self.executor.binance_paper.get_open_positions()) if hasattr(self.executor, "binance_paper") else max_pos
-        nse_full = not equity_open or nse_open >= max_pos
-        mcx_full = not mcx_enabled or not commodity_open or mcx_open >= max_pos
-        crypto_full = not crypto_enabled or crypto_open_count >= max_pos
-        if nse_full and mcx_full and crypto_full:
-            logger.info("All tradeable pools at max positions — skipping brain call")
-            return
 
         # Brain decides
         logger.info("Asking brain for trade decision...")

@@ -26,40 +26,54 @@ class MarketAnalyzer:
         self.options_exchange = self.instruments.get("options_exchange", "NFO")
         self.commodity_exchange = self.instruments.get("commodity_exchange", "MCX")
 
-    def build_market_context(self, focus_underlyings: set = None) -> str:
-        """Build market context. If focus_underlyings is given, only scan those stocks
-        (used when in a trade to avoid fetching all 50 stocks every 3 min)."""
+    def build_market_context(
+        self,
+        focus_underlyings: set = None,
+        include_nse: bool = True,
+        include_mcx: bool = True,
+        include_crypto: bool = True,
+    ) -> str:
+        """Build market context.
+        - focus_underlyings: only scan these stocks (in-trade mode)
+        - include_nse/mcx/crypto: skip full sections when that pool is at max positions
+        """
         sections = []
         now_ist = datetime.now(IST)
         equity_open = self._is_equity_session(now_ist)
         commodity_open = self._is_commodity_session(now_ist)
 
-        # 1. Broad market (NIFTY/VIX) — only when NSE or MCX is open (avoids Kite timeouts overnight)
+        # 1. Broad market (NIFTY/VIX) — only when NSE or MCX is open
         if equity_open or commodity_open:
             sections.append(self._broad_market_section())
         else:
             sections.append("### BROAD MARKET\nNSE and MCX both closed — no Kite data fetched.")
 
-        # 2. NSE Stock Options — only during NSE hours
-        if equity_open:
+        # 2. NSE Stock Options
+        if not include_nse:
+            sections.append("### NSE STOCK OPTIONS (NFO)\nNSE pool at max positions — no new entries.")
+        elif equity_open:
             sections.append(self._options_section(focus_underlyings=focus_underlyings))
         else:
             sections.append("### NSE STOCK OPTIONS (NFO)\nNSE market closed.")
 
-        # 3. Commodities (MCX) — only during MCX hours and when enabled
+        # 3. Commodities (MCX)
         agent_cfg = self.config.get("agent", {})
         mcx_enabled = agent_cfg.get("enable_mcx", True)
         crypto_enabled = agent_cfg.get("enable_crypto", True)
 
-        if not mcx_enabled:
+        if not include_mcx:
+            sections.append("### MCX COMMODITIES\nMCX pool at max positions — no new entries.")
+        elif not mcx_enabled:
             sections.append("### MCX COMMODITIES\nMCX trading paused.")
         elif commodity_open:
             sections.append(self._commodities_section())
         else:
             sections.append("### MCX COMMODITIES\nMCX market closed.")
 
-        # 4. Crypto — always open, when enabled
-        if crypto_enabled and self.bd and self.crypto:
+        # 4. Crypto
+        if not include_crypto:
+            sections.append("### CRYPTO\nCrypto pool at max positions — no new entries.")
+        elif crypto_enabled and self.bd and self.crypto:
             sections.append(self._crypto_section())
         elif not crypto_enabled:
             sections.append("### CRYPTO\nCrypto trading paused.")
