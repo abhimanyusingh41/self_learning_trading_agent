@@ -271,9 +271,11 @@ class TradingAgent:
 
             if approved_lots is None:
                 one_unit_value = entry * lot_size
+                one_unit_risk = abs(entry - sl) * lot_size
                 logger.warning(
                     f"Risk check BLOCKED option trade {symbol}: "
-                    f"1 lot ₹{one_unit_value:.0f} exceeds ₹{max_value:.0f} limit"
+                    f"1 lot value ₹{one_unit_value:.0f} (limit ₹{max_value:.0f}) | "
+                    f"risk ₹{one_unit_risk:.0f} (limit ₹{max_risk:.0f})"
                 )
                 return
 

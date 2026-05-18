@@ -14,7 +14,7 @@ binance:
 risk:
   daily_loss_limit_pct: 2.0
   per_trade_loss_pct: 0.5        # equity/commodity/crypto: % of capital at risk per trade
-  options_per_trade_loss_pct: 3.0  # options: higher tolerance (premium × SL% × lot_size)
+  options_per_trade_loss_pct: 10.0  # options: risk = premium × SL% × lot_size; 10% of capital allows standard 1-lot trades
   max_positions: 3               # max concurrent open trades across all pools
   max_trade_value_pct: 10.0
   options_max_trade_value: 30000  # absolute INR cap per option trade (premium × lot_size × lots)
