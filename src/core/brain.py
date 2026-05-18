@@ -300,7 +300,16 @@ For crypto trades: trade when confidence >= 0.55 and a clear technical setup exi
 
         try:
             data = json.loads(text)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            # Haiku sometimes appends text after the JSON — truncate at the extra data position
+            if "Extra data" in str(e):
+                try:
+                    data = json.loads(text[:e.pos])
+                    logger.debug("Trimmed extra text after JSON")
+                except json.JSONDecodeError:
+                    pass
+                else:
+                    return self._build_decision(data, raw_text)
             # Response was likely truncated mid-string due to token limit — attempt repair
             repaired = self._repair_truncated_json(text)
             try:
@@ -310,6 +319,9 @@ For crypto trades: trade when confidence >= 0.55 and a clear technical setup exi
                 logger.error(f"Failed to parse brain response as JSON: {e}\nRaw: {raw_text[:500]}")
                 return self._wait_decision(f"JSON parse error: {e}")
 
+        return self._build_decision(data, raw_text)
+
+    def _build_decision(self, data: dict, raw_text: str) -> TradeDecision:
         return TradeDecision(
             action=data.get("action", "WAIT").upper(),
             symbol=data.get("symbol"),
