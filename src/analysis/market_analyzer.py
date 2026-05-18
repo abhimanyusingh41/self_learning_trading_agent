@@ -26,7 +26,9 @@ class MarketAnalyzer:
         self.options_exchange = self.instruments.get("options_exchange", "NFO")
         self.commodity_exchange = self.instruments.get("commodity_exchange", "MCX")
 
-    def build_market_context(self) -> str:
+    def build_market_context(self, focus_underlyings: set = None) -> str:
+        """Build market context. If focus_underlyings is given, only scan those stocks
+        (used when in a trade to avoid fetching all 50 stocks every 3 min)."""
         sections = []
         now_ist = datetime.now(IST)
         equity_open = self._is_equity_session(now_ist)
@@ -40,7 +42,7 @@ class MarketAnalyzer:
 
         # 2. NSE Stock Options — only during NSE hours
         if equity_open:
-            sections.append(self._options_section())
+            sections.append(self._options_section(focus_underlyings=focus_underlyings))
         else:
             sections.append("### NSE STOCK OPTIONS (NFO)\nNSE market closed.")
 
@@ -85,14 +87,19 @@ class MarketAnalyzer:
         ]
         return "\n".join(lines)
 
-    def _options_section(self) -> str:
+    def _options_section(self, focus_underlyings: set = None) -> str:
         if not self.option_underlyings:
             return "### NSE STOCK OPTIONS (NFO)\nNo option underlyings configured."
 
         lines = ["### NSE STOCK OPTIONS (NFO) — BUY ONLY"]
+        if focus_underlyings:
+            lines.append(f"(In-trade scan: showing held underlyings only — {', '.join(sorted(focus_underlyings))})")
 
         for entry in self.option_underlyings:
             symbol = entry if isinstance(entry, str) else entry.get("symbol", "")
+            # When in a trade, only fetch data for held underlyings
+            if focus_underlyings and symbol not in focus_underlyings:
+                continue
             if not symbol:
                 continue
             lot_size = self.md.get_underlying_lot_size(symbol)
